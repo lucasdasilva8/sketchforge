@@ -9,3 +9,5 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
+      - key: PYTHONPATH
+        value: /opt/render/project/src/backend:/opt/render/project/src/ml

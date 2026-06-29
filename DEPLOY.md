@@ -2,9 +2,9 @@
 
 Public URL after setup: **https://lucasdasilva8.github.io/sketchforge/**
 
-The app has two parts:
-- **Frontend** → GitHub Pages (static React app with in-browser CAD)
-- **Backend API** → Render (sketch analysis + feedback pipeline)
+The app needs two parts:
+- **Frontend** → GitHub Pages (https://lucasdasilva8.github.io/sketchforge/)
+- **Backend API** → Render (https://sketchforge-api.onrender.com)
 
 ---
 

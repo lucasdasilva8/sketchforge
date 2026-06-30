@@ -28,6 +28,7 @@ export default function App() {
   const [referenceDimension, setReferenceDimension] = useState(100);
   const [referenceAxis, setReferenceAxis] = useState("width");
   const [templateHint, setTemplateHint] = useState("auto");
+  const [sketchFile, setSketchFile] = useState<File | null>(null);
   const [spec, setSpec] = useState<CADSpec | null>(null);
   const [versions, setVersions] = useState<VersionRecord[]>([]);
   const [mesh, setMesh] = useState<MeshData | null>(null);
@@ -61,31 +62,50 @@ export default function App() {
     if (spec) rebuildMesh(spec);
   }, [spec, rebuildMesh]);
 
+  const runConversion = useCallback(
+    async (file: File, hint = templateHint) => {
+      if (!projectId) return;
+      setLoading(true);
+      setError(null);
+      setStatus("Converting sketch…");
+      try {
+        const result = await convertSketch(
+          projectId,
+          file,
+          referenceDimension,
+          referenceAxis,
+          hint,
+        );
+        setSpec(result.cad_spec);
+        const template = result.cad_spec.template;
+        let message =
+          result.message ?? `Generated v${result.version} (${template})`;
+        if (template === "box" && hint === "auto") {
+          message +=
+            " — If this is a chair, pick “Chair / furniture” above and re-upload (or change shape type to re-convert).";
+        }
+        setStatus(message);
+        const project = await (await import("./lib/api")).getProject(projectId);
+        setVersions(project.versions);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Conversion failed");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [projectId, referenceDimension, referenceAxis, templateHint],
+  );
+
   const handleFileSelected = async (file: File) => {
-    if (!projectId) return;
+    setSketchFile(file);
     setSketchUrl(URL.createObjectURL(file));
-    setLoading(true);
-    setError(null);
-    setStatus("Converting sketch…");
-    try {
-      const result = await convertSketch(
-        projectId,
-        file,
-        referenceDimension,
-        referenceAxis,
-        templateHint,
-      );
-      setSpec(result.cad_spec);
-      setStatus(
-        result.message ??
-          `Generated v${result.version} (${result.cad_spec.template})`,
-      );
-      const project = await (await import("./lib/api")).getProject(projectId);
-      setVersions(project.versions);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Conversion failed");
-    } finally {
-      setLoading(false);
+    await runConversion(file, templateHint);
+  };
+
+  const handleTemplateHintChange = (hint: string) => {
+    setTemplateHint(hint);
+    if (sketchFile && hint !== "auto") {
+      void runConversion(sketchFile, hint);
     }
   };
 
@@ -156,7 +176,7 @@ export default function App() {
             templateHint={templateHint}
             onReferenceDimensionChange={setReferenceDimension}
             onReferenceAxisChange={setReferenceAxis}
-            onTemplateHintChange={setTemplateHint}
+            onTemplateHintChange={handleTemplateHintChange}
             onFileSelected={handleFileSelected}
             disabled={loading || !projectId}
           />

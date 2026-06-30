@@ -122,6 +122,9 @@ export function SketchUpload({
               </option>
             ))}
           </select>
+          <span className="field-hint">
+            Choose “Chair / furniture” for chair sketches if auto-detect picks box.
+          </span>
         </label>
       </div>
     </div>

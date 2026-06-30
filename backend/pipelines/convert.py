@@ -42,7 +42,7 @@ def convert_sketch(
     template_hint: str | None = None,
 ) -> CADSpec:
     score = chair_score(image_bytes)
-    force_chair = template_hint == "chair" or score >= 0.45
+    force_chair = template_hint == "chair" or score >= 0.38
 
     heuristic = sketch_to_cad_spec(
         image_bytes, reference_dimension, reference_axis, template_hint=template_hint
@@ -55,7 +55,7 @@ def convert_sketch(
     if use_ml and _predictor is not None and _predictor.is_ready():
         ml_spec = _predictor.predict(image_bytes, reference_dimension, reference_axis)
         # Don't let ML force box when sketch looks chair-like
-        if ml_spec.template == "box" and score >= 0.35:
+        if ml_spec.template == "box" and (score >= 0.28 or template_hint == "chair"):
             return heuristic
         if heuristic.confidence > ml_spec.confidence:
             return heuristic

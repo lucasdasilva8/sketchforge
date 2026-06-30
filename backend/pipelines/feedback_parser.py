@@ -100,10 +100,44 @@ def _rebuild_sketches(spec: CADSpec) -> CADSpec:
     return spec
 
 
+def _wants_chair_template(text: str) -> bool:
+    lower = text.lower()
+    return any(
+        phrase in lower
+        for phrase in (
+            "chair",
+            "furniture",
+            "stool",
+            "four legs",
+            "add legs",
+            "make it a chair",
+            "this is a chair",
+        )
+    )
+
+
+def _promote_to_chair(spec: CADSpec) -> CADSpec:
+    from pipelines.sketch_parser import _build_chair_spec
+
+    p = spec.parameters
+    seat_w = p.get("width", 80)
+    seat_d = p.get("depth", 60)
+    if seat_d < seat_w * 0.25:
+        seat_d = max(seat_w * 0.55, 25.0)
+    leg_h = p.get("height", max(seat_w * 0.42, 35.0))
+    leg_w = p.get("leg_width", p.get("wall_thickness", max(seat_w * 0.1, 5.0)))
+    seat_t = p.get("seat_thickness", 5.0)
+    return _build_chair_spec(seat_w, seat_d, leg_h, leg_w, seat_t, spec.confidence or 0.7)
+
+
 def apply_feedback(spec: CADSpec, feedback: str) -> tuple[CADSpec, list[str]]:
     updated = spec.model_copy(deep=True)
     updated.source = "feedback"
     changes: list[str] = []
+
+    if _wants_chair_template(feedback) and updated.template != "chair":
+        updated = _promote_to_chair(updated)
+        changes.append("Switched template to chair based on feedback")
 
     sentences = re.split(r"[.;!\n]+", feedback)
     for sentence in sentences:

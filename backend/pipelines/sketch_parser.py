@@ -120,8 +120,29 @@ def _chair_likelihood(gray: np.ndarray, processed: np.ndarray) -> float:
     if contours:
         contour = max(contours, key=cv2.contourArea)
         _, _, cw, ch = cv2.boundingRect(contour)
+        aspect = cw / max(ch, 1)
         if ch > cw * 1.05 and ch > h * 0.35:
             scores.append(0.7)
+
+        # Top-down / plan view: wide rectangular seat (very common chair sketch)
+        if aspect >= 1.15 and cw > w * 0.35:
+            peri = cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, 0.04 * peri, True)
+            if 4 <= len(approx) <= 10:
+                scores.append(0.62)
+            if aspect >= 1.6:
+                scores.append(0.68)
+
+        # Seat + multiple leg blobs seen from above
+        if len(significant) >= 4 and aspect >= 0.85:
+            scores.append(0.74)
+
+    # Parallel vertical strokes anywhere in frame (side-view chair on paper)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blurred, 40, 120)
+    v_any, h_any = _count_lines(edges)
+    if v_any >= 2 and h_any >= 1:
+        scores.append(0.55)
 
     return max(scores) if scores else 0.0
 
@@ -166,7 +187,7 @@ def analyze_sketch(image_bytes: bytes) -> SketchAnalysis:
     template: TemplateType = "box"
     confidence = 0.55
 
-    if chair_score >= 0.45:
+    if chair_score >= 0.38:
         template = "chair"
         confidence = max(chair_score, 0.6)
     elif circularity > 0.72:
@@ -367,7 +388,7 @@ def sketch_to_cad_spec(
     if template_hint and template_hint not in {"", "auto"}:
         analysis.template = template_hint  # type: ignore[misc]
         analysis.confidence = 0.9
-    elif template_hint == "chair" or (template_hint is None and score >= 0.45):
+    elif template_hint == "chair" or (template_hint is None and score >= 0.38):
         analysis.template = "chair"  # type: ignore[misc]
         analysis.confidence = max(analysis.confidence, score, 0.65)
 
@@ -381,12 +402,20 @@ def sketch_to_cad_spec(
     wall = max(min(width, depth) * 0.15, 2.0)
 
     if analysis.template == "chair":
-        seat_width = width
-        total_vertical = depth
-        seat_thickness = max(total_vertical * 0.12, 3.0)
-        leg_height = max(total_vertical - seat_thickness, 20.0)
-        seat_depth = max(seat_width * 0.55, 25.0)
-        leg_width = max(seat_width * 0.1, 4.0)
+        aspect = analysis.aspect_ratio
+        seat_thickness = max(min(width, depth) * 0.08, 4.0)
+        leg_width = max(max(width, depth) * 0.1, 5.0)
+        if aspect >= 1.15:
+            # Plan / top-down sketch: bbox is mostly the seat footprint
+            seat_width = max(width, depth)
+            seat_depth = min(width, depth) if min(width, depth) > seat_width * 0.25 else seat_width * 0.55
+            leg_height = max(seat_width * 0.42, 35.0)
+        else:
+            # Front / side elevation: bbox height includes legs
+            seat_width = width
+            total_vertical = max(width, depth) if analysis.bbox_height_px >= analysis.bbox_width_px else depth
+            leg_height = max(total_vertical - seat_thickness, 25.0)
+            seat_depth = max(seat_width * 0.55, 25.0)
         return _build_chair_spec(
             seat_width, seat_depth, leg_height, leg_width, seat_thickness, analysis.confidence
         )

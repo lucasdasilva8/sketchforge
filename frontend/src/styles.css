@@ -175,6 +175,12 @@ textarea {
   font-size: 0.92rem;
 }
 
+.field-hint {
+  color: #94a3b8;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .reference-fields input,
 .reference-fields select,
 .param-grid input,

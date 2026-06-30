@@ -91,11 +91,36 @@ def random_profile_spec() -> CADSpec:
     )
 
 
+def random_chair_spec() -> CADSpec:
+    seat_w, seat_d = _rand(50, 140), _rand(40, 100)
+    leg_h, leg_w = _rand(35, 90), _rand(4, 14)
+    seat_t = _rand(3, 10)
+    profile = [[0, 0], [seat_w, 0], [seat_w, seat_d], [0, seat_d]]
+    return CADSpec(
+        template="chair",
+        sketches=[SketchDef(id="seat", plane="XY", profile=profile)],
+        operations=[ExtrudeOp(sketch="seat", distance=seat_t)],
+        parameters={
+            "width": seat_w,
+            "depth": seat_d,
+            "height": leg_h,
+            "leg_width": leg_w,
+            "seat_thickness": seat_t,
+            "wall_thickness": leg_w,
+            "fillet_radius": 0,
+            "radius": seat_t,
+        },
+        confidence=1.0,
+        source="heuristic",
+    )
+
+
 GENERATORS = {
     "box": random_box_spec,
     "cylinder": random_cylinder_spec,
     "bracket": random_bracket_spec,
     "profile_extrude": random_profile_spec,
+    "chair": random_chair_spec,
 }
 
 

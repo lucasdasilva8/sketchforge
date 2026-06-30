@@ -1,4 +1,4 @@
-export type TemplateType = "box" | "cylinder" | "profile_extrude" | "bracket";
+export type TemplateType = "box" | "cylinder" | "profile_extrude" | "bracket" | "chair";
 export type PlaneType = "XY" | "XZ" | "YZ";
 
 export interface SketchDef {

@@ -22,6 +22,15 @@ export function syncSketchesFromParameters(spec: CADSpec): CADSpec {
       [0, -r],
       [r, 0],
     ];
+  } else if (next.template === "chair") {
+    const w = p.width ?? 80;
+    const d = p.depth ?? 60;
+    next.sketches[0].profile = [
+      [0, 0],
+      [w, 0],
+      [w, d],
+      [0, d],
+    ];
   } else if (next.template === "bracket") {
     const w = p.width ?? 100;
     const d = p.depth ?? 60;
@@ -39,7 +48,11 @@ export function syncSketchesFromParameters(spec: CADSpec): CADSpec {
 
   for (const op of next.operations) {
     if (op.op === "extrude") {
-      op.distance = p.height ?? op.distance;
+      if (next.template === "chair") {
+        op.distance = p.seat_thickness ?? op.distance;
+      } else {
+        op.distance = p.height ?? op.distance;
+      }
     }
     if (op.op === "fillet") {
       op.radius = p.fillet_radius ?? op.radius;
@@ -73,6 +86,23 @@ export function compileCADSpecCode(spec: CADSpec): string {
     `;
   }
 
+  if (synced.template === "chair") {
+    const sw = synced.parameters.width ?? 80;
+    const sd = synced.parameters.depth ?? 60;
+    const st = synced.parameters.seat_thickness ?? 5;
+    const lw = synced.parameters.leg_width ?? synced.parameters.wall_thickness ?? 8;
+    const lh = synced.parameters.height ?? 45;
+    return `
+      const sw = ${sw}, sd = ${sd}, st = ${st}, lw = ${lw}, lh = ${lh};
+      const leg = draw().hLine(lw).vLine(lw).close().sketchOnPlane("XY").extrude(lh);
+      const leg2 = leg.translate(sw - lw, 0, 0);
+      const leg3 = leg.translate(0, sd - lw, 0);
+      const leg4 = leg.translate(sw - lw, sd - lw, 0);
+      const seat = draw().hLine(sw).vLine(sd).close().sketchOnPlane("XY").extrude(st).translate(0, 0, lh);
+      return seat.fuse(leg).fuse(leg2).fuse(leg3).fuse(leg4);
+    `;
+  }
+
   return `
     const profile = ${profileJson};
     const height = ${height};
@@ -98,6 +128,8 @@ export function getEditableParameters(spec: CADSpec): string[] {
   switch (spec.template) {
     case "cylinder":
       return ["radius", "height"];
+    case "chair":
+      return ["width", "depth", "height", "leg_width", "seat_thickness"];
     case "bracket":
       return ["width", "depth", "height", "wall_thickness", "fillet_radius"];
     case "profile_extrude":

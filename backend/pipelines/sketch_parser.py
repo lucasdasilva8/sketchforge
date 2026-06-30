@@ -8,7 +8,7 @@ import numpy as np
 
 from models import CADSpec, ExtrudeOp, FilletOp, SketchDef
 
-TemplateType = Literal["box", "cylinder", "profile_extrude", "bracket"]
+TemplateType = Literal["box", "cylinder", "profile_extrude", "bracket", "chair"]
 AxisType = Literal["width", "depth", "height", "radius"]
 
 
@@ -59,6 +59,35 @@ def _normalize_profile(points: np.ndarray, size: float = 100.0) -> list[list[flo
     return simplified
 
 
+def _chair_likelihood(gray: np.ndarray, processed: np.ndarray) -> float:
+    h, w = gray.shape[:2]
+    contours, _ = cv2.findContours(processed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    significant = [c for c in contours if cv2.contourArea(c) > 0.008 * h * w]
+    if len(significant) >= 3:
+        return 0.72
+
+    lines = cv2.HoughLinesP(processed, 1, np.pi / 180, threshold=45, minLineLength=max(25, w // 12), maxLineGap=12)
+    if lines is None:
+        return 0.0
+
+    vertical = 0
+    horizontal = 0
+    for line in lines:
+        x1, y1, x2, y2 = line[0]
+        dx, dy = abs(x2 - x1), abs(y2 - y1)
+        if dy > dx * 1.8:
+            vertical += 1
+        elif dx > dy * 1.8:
+            horizontal += 1
+
+    tall = h >= w * 0.85
+    if vertical >= 2 and horizontal >= 1 and tall:
+        return 0.78
+    if vertical >= 3 and tall:
+        return 0.68
+    return 0.0
+
+
 def analyze_sketch(image_bytes: bytes) -> SketchAnalysis:
     gray = _load_grayscale(image_bytes)
     processed = _preprocess(gray)
@@ -88,10 +117,15 @@ def analyze_sketch(image_bytes: bytes) -> SketchAnalysis:
     vertex_count = len(approx)
     profile_points = _normalize_profile(approx)
 
+    chair_score = _chair_likelihood(gray, processed)
+
     template: TemplateType = "box"
     confidence = 0.55
 
-    if circularity > 0.72:
+    if chair_score >= 0.65:
+        template = "chair"
+        confidence = chair_score
+    elif circularity > 0.72:
         template = "cylinder"
         confidence = min(0.92, 0.55 + circularity * 0.4)
     elif vertex_count >= 6 and aspect_ratio > 1.2 and contour_area_ratio < 0.35:
@@ -243,6 +277,40 @@ def _build_bracket_spec(
     )
 
 
+def _build_chair_spec(
+    seat_width: float,
+    seat_depth: float,
+    leg_height: float,
+    leg_width: float,
+    seat_thickness: float,
+    confidence: float,
+) -> CADSpec:
+    profile = [
+        [0, 0],
+        [seat_width, 0],
+        [seat_width, seat_depth],
+        [0, seat_depth],
+    ]
+    return CADSpec(
+        template="chair",
+        sketches=[SketchDef(id="seat", plane="XY", profile=profile)],
+        operations=[
+            ExtrudeOp(sketch="seat", distance=seat_thickness),
+        ],
+        parameters={
+            "width": round(seat_width, 2),
+            "depth": round(seat_depth, 2),
+            "height": round(leg_height, 2),
+            "leg_width": round(leg_width, 2),
+            "seat_thickness": round(seat_thickness, 2),
+            "fillet_radius": 0,
+            "wall_thickness": round(leg_width, 2),
+        },
+        confidence=confidence,
+        source="heuristic",
+    )
+
+
 def sketch_to_cad_spec(
     image_bytes: bytes,
     reference_dimension: float,
@@ -258,6 +326,12 @@ def sketch_to_cad_spec(
     radius = min(analysis.bbox_width_px, analysis.bbox_height_px) * scale / 2
     wall = max(min(width, depth) * 0.15, 2.0)
 
+    seat_thickness = max(min(width, depth) * 0.08, 3.0)
+    leg_width = max(min(width, depth) * 0.12, 4.0)
+    leg_height = max(height * 1.4, seat_thickness * 2)
+
+    if analysis.template == "chair":
+        return _build_chair_spec(width, depth, leg_height, leg_width, seat_thickness, analysis.confidence)
     if analysis.template == "cylinder":
         return _build_cylinder_spec(radius, height, analysis.confidence)
     if analysis.template == "profile_extrude":

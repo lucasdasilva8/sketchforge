@@ -14,10 +14,10 @@ frontend/dist/
 
 # Data & models
 ml/data/
-ml/checkpoints/
 backend/data/
 *.pth
 *.pt
+!ml/checkpoints/sketch_cad.pt
 
 # IDE & OS
 .DS_Store

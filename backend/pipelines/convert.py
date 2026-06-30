@@ -19,18 +19,41 @@ except Exception:
     _predictor = None
 
 
+def reload_predictor() -> bool:
+    """Reload ML weights after auto-retrain."""
+    global _predictor
+    try:
+        from inference.predictor import SketchCADPredictor
+
+        loaded = SketchCADPredictor.try_load()
+        if loaded is not None and loaded.is_ready():
+            _predictor = loaded
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def convert_sketch(
     image_bytes: bytes,
     reference_dimension: float,
     reference_axis: str = "width",
     use_ml: bool = True,
 ) -> CADSpec:
-    if use_ml and _predictor is not None and _predictor.is_ready():
-        spec = _predictor.predict(image_bytes, reference_dimension, reference_axis)
-        if spec.confidence >= 0.4:
-            return spec
+    heuristic = sketch_to_cad_spec(image_bytes, reference_dimension, reference_axis)  # type: ignore[arg-type]
 
-    return sketch_to_cad_spec(image_bytes, reference_dimension, reference_axis)  # type: ignore[arg-type]
+    # Prefer furniture/heuristic when it is more confident than ML box guesses
+    if heuristic.template == "chair" and heuristic.confidence >= 0.55:
+        return heuristic
+
+    if use_ml and _predictor is not None and _predictor.is_ready():
+        ml_spec = _predictor.predict(image_bytes, reference_dimension, reference_axis)
+        if heuristic.confidence > ml_spec.confidence:
+            return heuristic
+        if ml_spec.confidence >= 0.4:
+            return ml_spec
+
+    return heuristic
 
 
 def refine_spec(

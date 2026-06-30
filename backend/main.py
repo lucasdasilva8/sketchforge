@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from models import (
@@ -41,11 +43,52 @@ app.add_middleware(
 @app.on_event("startup")
 def startup() -> None:
     init_db()
+    _maybe_bootstrap_model()
+
+
+def _maybe_bootstrap_model() -> None:
+    """Ensure a checkpoint exists on Render/production deploys."""
+    if os.getenv("SKIP_MODEL_BOOTSTRAP", "").lower() in {"1", "true", "yes"}:
+        return
+    ml_dir = Path(__file__).resolve().parent.parent / "ml"
+    checkpoint = ml_dir / "checkpoints" / "sketch_cad.pt"
+    if checkpoint.exists():
+        return
+    try:
+        if str(ml_dir) not in sys.path:
+            sys.path.insert(0, str(ml_dir))
+        if str(Path(__file__).resolve().parent) not in sys.path:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from dataset.generate_synthetic import generate_dataset
+        from train import train
+
+        print("No ML checkpoint found — running bootstrap training...")
+        generate_dataset(800, ml_dir / "data" / "synthetic")
+        train(epochs=5, batch_size=16, synthetic_count=800, pretrained=True)
+        from pipelines.convert import reload_predictor
+
+        reload_predictor()
+        print("Bootstrap training complete.")
+    except Exception as exc:
+        print(f"Bootstrap training skipped: {exc}")
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "sketchforge"}
+
+
+@app.get("/ml/status")
+def ml_status() -> dict:
+    try:
+        ml_dir = Path(__file__).resolve().parent.parent / "ml"
+        if str(ml_dir) not in sys.path:
+            sys.path.insert(0, str(ml_dir))
+        from auto_retrain import get_status
+
+        return get_status()
+    except Exception as exc:
+        return {"enabled": False, "error": str(exc)}
 
 
 @app.post("/projects", response_model=ProjectResponse)
@@ -110,7 +153,7 @@ async def convert_route(
 
 
 @app.post("/projects/{project_id}/refine", response_model=RefineResponse)
-def refine_route(project_id: str, body: RefineRequest) -> RefineResponse:
+def refine_route(project_id: str, body: RefineRequest, background_tasks: BackgroundTasks) -> RefineResponse:
     try:
         project = get_project(project_id)
     except KeyError as exc:
@@ -133,6 +176,20 @@ def refine_route(project_id: str, body: RefineRequest) -> RefineResponse:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     version = add_version(project_id, updated, feedback=body.feedback)
+
+    def _schedule_retrain() -> None:
+        try:
+            ml_dir = Path(__file__).resolve().parent.parent / "ml"
+            if str(ml_dir) not in sys.path:
+                sys.path.insert(0, str(ml_dir))
+            from auto_retrain import notify_feedback_saved
+
+            notify_feedback_saved()
+        except Exception as exc:
+            print(f"Auto-retrain scheduling failed: {exc}")
+
+    background_tasks.add_task(_schedule_retrain)
+
     return RefineResponse(
         project_id=project_id,
         version=version,

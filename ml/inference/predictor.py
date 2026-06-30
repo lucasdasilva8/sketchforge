@@ -92,6 +92,27 @@ def params_to_spec(template: str, parameters: dict[str, float], confidence: floa
             confidence=confidence,
             source="ml",
         )
+    if template == "chair":
+        seat_t = parameters.get("seat_thickness", parameters.get("radius", 5))
+        leg_w = parameters.get("leg_width", parameters.get("wall_thickness", 8))
+        leg_h = parameters.get("height", 40)
+        profile = [[0, 0], [width, 0], [width, depth], [0, depth]]
+        return CADSpec(
+            template="chair",
+            sketches=[SketchDef(id="seat", plane="XY", profile=profile)],
+            operations=[ExtrudeOp(sketch="seat", distance=seat_t)],
+            parameters={
+                "width": width,
+                "depth": depth,
+                "height": leg_h,
+                "leg_width": leg_w,
+                "seat_thickness": seat_t,
+                "wall_thickness": leg_w,
+                "fillet_radius": 0,
+            },
+            confidence=confidence,
+            source="ml",
+        )
     if template == "bracket":
         profile = [[0, 0], [width, 0], [width, wall], [wall, wall], [wall, depth], [0, depth], [0, 0]]
         return CADSpec(
@@ -133,7 +154,7 @@ class SketchCADPredictor:
             return cls(None)
         model = SketchCADModel(pretrained=False)
         state = torch.load(CHECKPOINT_PATH, map_location="cpu", weights_only=True)
-        model.load_state_dict(state)
+        model.load_state_dict(state, strict=False)
         model.eval()
         return cls(model)
 

@@ -11,3 +11,7 @@ services:
         value: "3.11.9"
       - key: PYTHONPATH
         value: /opt/render/project/src/backend:/opt/render/project/src/ml
+      - key: AUTO_RETRAIN
+        value: "false"
+      - key: SKIP_MODEL_BOOTSTRAP
+        value: "false"

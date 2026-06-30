@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 
-TemplateType = Literal["box", "cylinder", "profile_extrude", "bracket"]
+TemplateType = Literal["box", "cylinder", "profile_extrude", "bracket", "chair"]
 PlaneType = Literal["XY", "XZ", "YZ"]
 SourceType = Literal["heuristic", "ml", "feedback", "manual"]
 

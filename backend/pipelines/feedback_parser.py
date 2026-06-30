@@ -12,7 +12,9 @@ DIMENSION_ALIASES = {
     "height": ["height", "tall", "taller", "short", "shorter", "high", "higher", "low", "lower"],
     "radius": ["radius", "round", "rounder", "diameter", "thick", "thicker", "thin", "thinner"],
     "fillet_radius": ["fillet", "corner", "corners", "round the corners", "smooth", "smoother"],
-    "wall_thickness": ["wall", "walls", "thickness", "leg", "legs"],
+    "wall_thickness": ["wall", "walls", "thickness"],
+    "leg_width": ["leg", "legs", "leg width"],
+    "seat_thickness": ["seat", "seat thickness", "cushion"],
 }
 
 
@@ -76,9 +78,17 @@ def _rebuild_sketches(spec: CADSpec) -> CADSpec:
             [0, 0], [w, 0], [w, wall], [wall, wall], [wall, d], [0, d], [0, 0]
         ]
 
+    elif template == "chair":
+        w = p.get("width", 80)
+        d = p.get("depth", 60)
+        spec.sketches[0].profile = [[0, 0], [w, 0], [w, d], [0, d]]
+
     for op in spec.operations:
         if isinstance(op, ExtrudeOp) or (isinstance(op, dict) and op.get("op") == "extrude"):
-            distance = p.get("height", 30)
+            if template == "chair":
+                distance = p.get("seat_thickness", 5)
+            else:
+                distance = p.get("height", 30)
             if isinstance(op, ExtrudeOp):
                 op.distance = distance
         if isinstance(op, FilletOp) or (isinstance(op, dict) and op.get("op") == "fillet"):

@@ -131,6 +131,40 @@ For research-grade results, download the [Fusion 360 Gallery](https://github.com
 
 ---
 
+## Automatic retraining
+
+After you apply feedback in the app, the backend automatically retrains when **3 corrections** have been collected (configurable).
+
+Check status:
+```bash
+curl http://127.0.0.1:8000/ml/status
+```
+
+Environment variables:
+- `AUTO_RETRAIN=true` — enable/disable (default: true locally, false on Render)
+- `RETRAIN_THRESHOLD=3` — feedback count before retrain
+- `INCREMENTAL_EPOCHS=5` — epochs per auto-retrain
+
+On Render, auto-retrain is disabled by default (CPU limits). Retrain locally and push the checkpoint via Git LFS.
+
+---
+
+## Production model (GitHub + Render)
+
+The trained checkpoint `ml/checkpoints/sketch_cad.pt` is tracked with **Git LFS** so Render can use it.
+
+After retraining locally:
+```bash
+git lfs install
+git add ml/checkpoints/sketch_cad.pt
+git commit -m "Update ML checkpoint"
+git push
+```
+
+If no checkpoint exists on first Render deploy, the API runs a short bootstrap train on startup.
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |

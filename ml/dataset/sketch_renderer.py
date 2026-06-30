@@ -76,6 +76,22 @@ def render_spec_sketch(spec: CADSpec, thickness: int | None = None) -> np.ndarra
 
     if spec.template == "cylinder":
         _draw_cylinder(canvas, params.get("radius", params.get("width", 50) / 2), thickness)
+    elif spec.template == "chair":
+        seat_w = params.get("width", 80)
+        seat_d = params.get("depth", 60)
+        leg_w = params.get("leg_width", params.get("wall_thickness", 8))
+        leg_h = params.get("height", 45)
+        seat_profile = [[0, 0], [seat_w, 0], [seat_w, seat_d], [0, seat_d]]
+        _draw_profile(canvas, seat_profile, thickness)
+        # Leg hints in front view: four vertical strokes under seat
+        points = _fit_points(seat_profile)
+        xs = sorted({p[0] for p in points})
+        ys = sorted({p[1] for p in points})
+        if len(xs) >= 2 and len(ys) >= 2:
+            leg_x_positions = [xs[0] + leg_w * 0.3, xs[-1] - leg_w * 0.3]
+            seat_bottom = ys[-1]
+            for lx in leg_x_positions:
+                cv2.line(canvas, (int(lx), int(seat_bottom)), (int(lx), int(seat_bottom + leg_h * 0.35)), (0, 0, 0), thickness, cv2.LINE_AA)
     else:
         profile = spec.sketches[0].profile
         _draw_profile(canvas, profile, thickness)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-TEMPLATE_IDS = ["box", "cylinder", "profile_extrude", "bracket"]
+TEMPLATE_IDS = ["box", "cylinder", "profile_extrude", "bracket", "chair"]
 TEMPLATE_TO_IDX = {name: idx for idx, name in enumerate(TEMPLATE_IDS)}
 IDX_TO_TEMPLATE = {idx: name for name, idx in TEMPLATE_TO_IDX.items()}
 

@@ -10,7 +10,7 @@
     "units": { "type": "string", "enum": ["mm", "cm", "in"] },
     "template": {
       "type": "string",
-      "enum": ["box", "cylinder", "profile_extrude", "bracket"]
+      "enum": ["box", "cylinder", "profile_extrude", "bracket", "chair"]
     },
     "sketches": {
       "type": "array",

@@ -74,8 +74,21 @@ def _maybe_bootstrap_model() -> None:
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok", "service": "sketchforge"}
+def health() -> dict:
+    from pipelines.convert import _predictor
+
+    chair_supported = True
+    try:
+        from pipelines.sketch_parser import chair_score as _chair_score  # noqa: F401
+    except Exception:
+        chair_supported = False
+
+    return {
+        "status": "ok",
+        "service": "sketchforge",
+        "chair_detection": chair_supported,
+        "ml_ready": _predictor is not None and _predictor.is_ready(),
+    }
 
 
 @app.get("/ml/status")
@@ -142,9 +155,11 @@ async def convert_route(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     version = add_version(project_id, spec)
-    message = None
+    message = f"Detected {spec.template} (confidence {(spec.confidence * 100):.0f}%)"
     if spec.confidence < 0.5:
-        message = "Low confidence — adjust parameters manually or add a reference dimension."
+        message += " — low confidence; adjust parameters or pick a shape type."
+    if spec.template == "box":
+        message += " For chair sketches, choose “Chair / furniture” in Shape type."
 
     return ConvertResponse(
         project_id=project_id,

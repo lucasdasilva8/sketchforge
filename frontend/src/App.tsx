@@ -8,6 +8,7 @@ import {
   createProject,
   refineProject,
   updateSpecParameters,
+  API_BASE,
 } from "./lib/api";
 import { syncSketchesFromParameters } from "./lib/cadCompiler";
 import { getCADWorker } from "./lib/cadWorkerClient";
@@ -56,6 +57,26 @@ export default function App() {
     createProject("My sketch")
       .then((p) => setProjectId(p.id))
       .catch((err) => setError(err.message));
+  }, []);
+
+  useEffect(() => {
+    const isLocal =
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.port === "5173";
+    if (!isLocal) return;
+    fetch(`${API_BASE}/health`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((health: { chair_detection?: boolean } | null) => {
+        if (health && health.chair_detection === false) {
+          setError(
+            "Backend is outdated (no chair detection). Stop the old server and run ./scripts/dev.sh",
+          );
+        }
+      })
+      .catch(() => {
+        /* ignore health probe failures */
+      });
   }, []);
 
   useEffect(() => {

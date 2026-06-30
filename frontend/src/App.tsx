@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ConversionSummary } from "./components/ConversionSummary";
+import { ChairHelpPanel } from "./components/ChairHelpPanel";
 import { FeedbackPanel } from "./components/FeedbackPanel";
 import { ModelViewer } from "./components/ModelViewer";
 import { ParametricControls } from "./components/ParametricControls";
@@ -240,6 +241,17 @@ export default function App() {
             onFileSelected={handleFileSelected}
             disabled={loading || !projectId}
           />
+          <ChairHelpPanel
+            context={{
+              templateHint,
+              furnitureStyleHint,
+              detectedStyle:
+                spec?.template === "chair"
+                  ? String(spec.parameters.furniture_style ?? "")
+                  : undefined,
+              hasSketch: Boolean(sketchFile),
+            }}
+          />
           <ConversionSummary
             summary={summary}
             meshReady={mesh !== null && !meshError}
@@ -256,6 +268,7 @@ export default function App() {
             versions={versions}
             onSubmitFeedback={handleFeedback}
             disabled={!spec || loading}
+            isChair={spec?.template === "chair"}
           />
         </section>
         <section className="right-column">

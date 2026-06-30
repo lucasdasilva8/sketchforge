@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import { Bounds, Center, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { MeshData } from "../types/cadSpec";
 
@@ -24,6 +24,34 @@ function CADMesh({ mesh }: { mesh: MeshData }) {
     <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
       <meshStandardMaterial color="#1a1a1a" metalness={0.08} roughness={0.62} />
     </mesh>
+  );
+}
+
+function Scene({ mesh }: { mesh: MeshData }) {
+  const gridSize = useMemo(() => {
+    const box = new THREE.Box3();
+    const v = mesh.vertices;
+    for (let i = 0; i < v.length; i += 3) {
+      box.expandByPoint(new THREE.Vector3(v[i], v[i + 1], v[i + 2]));
+    }
+    const size = box.getSize(new THREE.Vector3());
+    const span = Math.max(size.x, size.y, size.z, 1);
+    return Math.ceil((span * 2.5) / 10) * 10;
+  }, [mesh]);
+
+  return (
+    <>
+      <ambientLight intensity={0.72} />
+      <directionalLight castShadow position={[120, 180, 80]} intensity={0.95} />
+      <directionalLight position={[-80, 60, -40]} intensity={0.35} />
+      <gridHelper args={[gridSize, 20, "#c4b4b4", "#e0d6d4"]} />
+      <Bounds fit clip observe margin={1.45}>
+        <Center>
+          <CADMesh mesh={mesh} />
+        </Center>
+      </Bounds>
+      <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
+    </>
   );
 }
 
@@ -60,14 +88,14 @@ export function ModelViewer({ mesh, loading, error, onRebuild, canRebuild }: Mod
         {!mesh && !loading && !error && (
           <div className="viewer-overlay">Upload a sketch to generate a 3D model</div>
         )}
-        <Canvas shadows style={{ background: "#f7f2f0" }}>
+        <Canvas
+          shadows
+          dpr={[1, 2]}
+          style={{ width: "100%", height: "100%", display: "block", background: "#f7f2f0" }}
+          camera={{ fov: 42, near: 0.1, far: 20000, position: [120, 90, 120] }}
+        >
           <color attach="background" args={["#f7f2f0"]} />
-          <PerspectiveCamera makeDefault position={[180, 120, 180]} fov={45} />
-          <ambientLight intensity={0.72} />
-          <directionalLight castShadow position={[120, 180, 80]} intensity={0.95} />
-          <gridHelper args={[400, 20, "#c4b4b4", "#e0d6d4"]} />
-          {mesh && <CADMesh mesh={mesh} />}
-          <OrbitControls makeDefault enableDamping />
+          {mesh && <Scene mesh={mesh} />}
         </Canvas>
       </div>
     </div>

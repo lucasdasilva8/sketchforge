@@ -23,7 +23,7 @@ export function ParametricControls({ spec, onChange }: ParametricControlsProps) 
     <div className="params-panel">
       <div className="panel-header compact">
         <h3>Parameters</h3>
-        <span className="badge">{spec.template}</span>
+        <span className="badge subtle">{spec.template}</span>
         {spec.template === "chair" && spec.parameters.furniture_style && (
           <span className="badge subtle">
             {chairStyleDescription(String(spec.parameters.furniture_style))}

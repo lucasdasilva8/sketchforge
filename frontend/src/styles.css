@@ -169,6 +169,7 @@ textarea {
 .feedback-panel,
 .params-panel,
 .summary-panel,
+.help-panel,
 .viewer-panel {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -444,6 +445,110 @@ textarea:focus {
   margin-top: 1.1rem;
 }
 
+.help-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.help-panel-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: Oswald, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-align: left;
+}
+
+.help-panel-toggle:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.help-panel-chevron {
+  font-size: 1.1rem;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.help-panel-body {
+  padding: 0 1.25rem 1.15rem;
+  border-top: 1px solid var(--line);
+}
+
+.help-section + .help-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.help-section h4 {
+  margin: 0 0 0.5rem;
+  font-family: Oswald, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.help-section ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--ink-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.help-section li + li {
+  margin-top: 0.35rem;
+}
+
+.feedback-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.75rem;
+}
+
+.feedback-suggestions-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.feedback-chip {
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-muted);
+  padding: 0.3rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.feedback-chip:hover:not(:disabled) {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+}
+
+.feedback-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* —— Feedback —— */
 .feedback-panel textarea {
   resize: vertical;
@@ -469,6 +574,7 @@ textarea:focus {
 /* —— 3D Viewer —— */
 .viewer-panel {
   min-height: 640px;
+  height: min(78vh, 760px);
   display: flex;
   flex-direction: column;
   background: var(--paper-solid);
@@ -495,10 +601,17 @@ textarea:focus {
 .viewer-canvas {
   position: relative;
   flex: 1;
-  min-height: 560px;
+  min-height: 0;
+  width: 100%;
   overflow: hidden;
   border: 1px solid var(--line);
   background: #f7f2f0;
+}
+
+.viewer-canvas canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .viewer-overlay {

@@ -43,6 +43,17 @@ function fuseAll(parts: string[]): string {
   return `${code}\nreturn body;`;
 }
 
+/** Seat stops short of the back so the backrest reads as separate vertical structure. */
+const SEAT_AND_BACK_SETUP = `
+    const seatSetback = Math.max(lw * 1.5, sd * 0.18);
+    const seatD = Math.max(sd * 0.55, sd - seatSetback);
+    const backDepth = Math.max(lw * 0.75, 5);
+    const backY = sd - backDepth;
+    const backBaseZ = lh + st * 0.2;
+    let seat = draw().hLine(sw).vLine(seatD).close().sketchOnPlane("XY").extrude(st);
+    seat = seat.translate(0, 0, lh);
+`;
+
 function compileLadderBack({ sw, sd, st, lw, lh, bh }: ChairParams): string {
   const innerW = `sw - 2 * lw`;
   return `
@@ -55,10 +66,9 @@ function compileLadderBack({ sw, sd, st, lw, lh, bh }: ChairParams): string {
     const legFR = mkBar(lw, lw, lh, sw - lw, 0, 0);
     const postBL = mkBar(lw, lw, bh, 0, sd - lw, 0);
     const postBR = mkBar(lw, lw, bh, sw - lw, sd - lw, 0);
-    let seat = draw().hLine(sw).vLine(sd).close().sketchOnPlane("XY").extrude(st);
-    seat = seat.translate(0, 0, lh);
-    const slat1 = mkBar(innerW, slatD, slatT, lw, sd - lw - slatD, lh + (bh - lh) * 0.38);
-    const slat2 = mkBar(innerW, slatD, slatT, lw, sd - lw - slatD, lh + (bh - lh) * 0.78);
+    ${SEAT_AND_BACK_SETUP}
+    const slat1 = mkBar(innerW, slatD, slatT, lw, backY - slatD * 0.15, lh + (bh - lh) * 0.38);
+    const slat2 = mkBar(innerW, slatD, slatT, lw, backY - slatD * 0.15, lh + (bh - lh) * 0.78);
     const apron = mkBar(innerW, Math.max(lw * 0.65, 4), st * 0.55, lw, 0, lh - st * 0.55);
     ${fuseAll(["seat", "legFL", "legFR", "postBL", "postBR", "slat1", "slat2", "apron"])}
   `;
@@ -74,9 +84,8 @@ function compileDining({ sw, sd, st, lw, lh, bh }: ChairParams): string {
     const legFR = mkBar(lw, lw, lh, sw - lw, 0, 0);
     const legBL = mkBar(lw, lw, lh, 0, sd - lw, 0);
     const legBR = mkBar(lw, lw, lh, sw - lw, sd - lw, 0);
-    let seat = draw().hLine(sw).vLine(sd).close().sketchOnPlane("XY").extrude(st);
-    seat = seat.translate(0, 0, lh);
-    const backPanel = mkBar(innerW, lw * 0.9, bh - lh, lw, sd - lw, lh);
+    ${SEAT_AND_BACK_SETUP}
+    const backPanel = mkBar(innerW, backDepth, bh - backBaseZ, lw, backY, backBaseZ);
     ${fuseAll(["seat", "legFL", "legFR", "legBL", "legBR", "backPanel"])}
   `;
 }
@@ -107,11 +116,10 @@ function compileArmchair({ sw, sd, st, lw, lh, bh }: ChairParams): string {
     const legFR = mkBar(lw, lw, lh, sw - lw, 0, 0);
     const legBL = mkBar(lw, lw, lh, 0, sd - lw, 0);
     const legBR = mkBar(lw, lw, lh, sw - lw, sd - lw, 0);
-    let seat = draw().hLine(sw).vLine(sd).close().sketchOnPlane("XY").extrude(st);
-    seat = seat.translate(0, 0, lh);
-    const backPanel = mkBar(innerW, lw, bh - lh, lw, sd - lw, lh);
-    const armL = mkBar(armW, sd * 0.55, lw, 0, sd * 0.2, lh);
-    const armR = mkBar(armW, sd * 0.55, lw, sw - lw, sd * 0.2, lh);
+    ${SEAT_AND_BACK_SETUP}
+    const backPanel = mkBar(innerW, backDepth, bh - backBaseZ, lw, backY, backBaseZ);
+    const armL = mkBar(armW, seatD * 0.62, lw, 0, seatD * 0.18, lh);
+    const armR = mkBar(armW, seatD * 0.62, lw, sw - lw, seatD * 0.18, lh);
     ${fuseAll(["seat", "legFL", "legFR", "legBL", "legBR", "backPanel", "armL", "armR"])}
   `;
 }
@@ -122,15 +130,14 @@ function compileBench({ sw, sd, st, lw, lh, bh }: ChairParams): string {
     ${MK_BAR}
     const legCount = sw > lh * 4 ? 4 : 3;
     const span = sw - 2 * lw;
-    let seat = draw().hLine(sw).vLine(sd).close().sketchOnPlane("XY").extrude(st);
-    seat = seat.translate(0, 0, lh);
+    ${SEAT_AND_BACK_SETUP}
     const legs = [];
     for (let i = 0; i < legCount; i++) {
       const x = lw + (span * i) / Math.max(legCount - 1, 1);
       legs.push(mkBar(lw, lw, lh, x, 0, 0));
       legs.push(mkBar(lw, lw, lh, x, sd - lw, 0));
     }
-    const backRail = mkBar(sw - 2 * lw, lw * 0.8, lw * 0.6, lw, sd - lw, bh - lw * 0.6);
+    const backRail = mkBar(sw - 2 * lw, backDepth, lw * 0.55, lw, backY, bh - lw * 0.55);
     let body = seat;
     for (const leg of legs) body = body.fuse(leg);
     return body.fuse(backRail);

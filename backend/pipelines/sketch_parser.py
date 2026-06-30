@@ -87,10 +87,17 @@ def _chair_likelihood(gray: np.ndarray, processed: np.ndarray) -> float:
         return vertical, horizontal
 
     vertical, horizontal = _count_lines(processed)
-    tall = h >= w * 0.75
-    if vertical >= 2 and horizontal >= 1 and tall:
+    contour_tall = False
+    contour_aspect = 1.0
+    if contours:
+        main = max(contours, key=cv2.contourArea)
+        _, _, cw, ch = cv2.boundingRect(main)
+        contour_aspect = cw / max(ch, 1)
+        contour_tall = ch > cw * 1.05
+
+    if vertical >= 2 and horizontal >= 1 and contour_tall:
         scores.append(0.82)
-    elif vertical >= 2 and tall:
+    elif vertical >= 2 and contour_tall:
         scores.append(0.68)
 
     # Better for phone photos: adaptive threshold + Canny
@@ -100,7 +107,7 @@ def _chair_likelihood(gray: np.ndarray, processed: np.ndarray) -> float:
     )
     adaptive_edges = cv2.Canny(adaptive, 40, 120)
     v2, h2 = _count_lines(adaptive_edges)
-    if v2 >= 2 and h2 >= 1 and tall:
+    if v2 >= 2 and h2 >= 1 and contour_tall:
         scores.append(0.8)
 
     # Ink density profile: seat band at top, legs below
@@ -111,9 +118,9 @@ def _chair_likelihood(gray: np.ndarray, processed: np.ndarray) -> float:
         top_band = row_density[: max(h // 3, 1)].mean()
         mid_band = row_density[h // 3 : 2 * h // 3].mean() if h >= 3 else 0.0
         bottom_band = row_density[2 * h // 3 :].mean() if h >= 3 else 0.0
-        if tall and top_band > 0.04 and bottom_band > 0.03 and top_band >= mid_band * 0.7:
+        if contour_tall and top_band > 0.04 and bottom_band > 0.03 and top_band >= mid_band * 0.7:
             scores.append(0.72)
-        if col_density.max() > 0.08 and top_band > 0.03 and tall:
+        if col_density.max() > 0.08 and top_band > 0.03 and contour_tall:
             scores.append(0.65)
 
     # Single tall blob (common when seat + legs merge in one contour)
@@ -124,24 +131,27 @@ def _chair_likelihood(gray: np.ndarray, processed: np.ndarray) -> float:
         if ch > cw * 1.05 and ch > h * 0.35:
             scores.append(0.7)
 
-        # Top-down / plan view: wide rectangular seat (very common chair sketch)
-        if aspect >= 1.15 and cw > w * 0.35:
-            peri = cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, 0.04 * peri, True)
-            if 4 <= len(approx) <= 10:
-                scores.append(0.62)
-            if aspect >= 1.6:
-                scores.append(0.68)
+        # Top-down / plan view: wide seat with visible leg blobs
+        if aspect >= 1.15 and cw > w * 0.35 and len(significant) >= 4:
+            scores.append(0.62)
+        if aspect >= 1.6 and cw > w * 0.35 and len(significant) >= 2:
+            scores.append(0.68)
 
         # Seat + multiple leg blobs seen from above
         if len(significant) >= 4 and aspect >= 0.85:
             scores.append(0.74)
 
-    # Parallel vertical strokes anywhere in frame (side-view chair on paper)
+        # Single closed quadrilateral is usually a box/enclosure face
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.03 * peri, True)
+        if len(significant) == 1 and len(approx) == 4:
+            return 0.0
+
+    # Parallel vertical strokes (side-view chair) — only when silhouette is tall
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     edges = cv2.Canny(blurred, 40, 120)
     v_any, h_any = _count_lines(edges)
-    if v_any >= 2 and h_any >= 1:
+    if v_any >= 2 and h_any >= 1 and contour_tall:
         scores.append(0.55)
 
     return max(scores) if scores else 0.0

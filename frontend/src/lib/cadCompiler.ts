@@ -94,12 +94,20 @@ export function compileCADSpecCode(spec: CADSpec): string {
     const lh = synced.parameters.height ?? 45;
     return `
       const sw = ${sw}, sd = ${sd}, st = ${st}, lw = ${lw}, lh = ${lh};
-      const leg = draw().hLine(lw).vLine(lw).close().sketchOnPlane("XY").extrude(lh);
-      const leg2 = leg.translate(sw - lw, 0, 0);
-      const leg3 = leg.translate(0, sd - lw, 0);
-      const leg4 = leg.translate(sw - lw, sd - lw, 0);
-      const seat = draw().hLine(sw).vLine(sd).close().sketchOnPlane("XY").extrude(st).translate(0, 0, lh);
-      return seat.fuse(leg).fuse(leg2).fuse(leg3).fuse(leg4);
+      const mkLeg = (x, y) => {
+        let leg = draw().hLine(lw).vLine(lw).close().sketchOnPlane("XY").extrude(lh);
+        return leg.translate(x, y, 0);
+      };
+      const leg1 = mkLeg(0, 0);
+      const leg2 = mkLeg(sw - lw, 0);
+      const leg3 = mkLeg(0, sd - lw);
+      const leg4 = mkLeg(sw - lw, sd - lw);
+      let seat = draw().hLine(sw).vLine(sd).close().sketchOnPlane("XY").extrude(st);
+      seat = seat.translate(0, 0, lh);
+      let body = seat.fuse(leg1);
+      body = body.fuse(leg2);
+      body = body.fuse(leg3);
+      return body.fuse(leg4);
     `;
   }
 

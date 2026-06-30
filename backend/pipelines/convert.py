@@ -40,12 +40,17 @@ def convert_sketch(
     reference_axis: str = "width",
     use_ml: bool = True,
     template_hint: str | None = None,
+    furniture_style_hint: str | None = None,
 ) -> CADSpec:
     score = chair_score(image_bytes)
     force_chair = template_hint == "chair" or score >= 0.38
 
     heuristic = sketch_to_cad_spec(
-        image_bytes, reference_dimension, reference_axis, template_hint=template_hint
+        image_bytes,
+        reference_dimension,
+        reference_axis,
+        template_hint=template_hint,
+        furniture_style_hint=furniture_style_hint,
     )
 
     # Never downgrade a chair to a box

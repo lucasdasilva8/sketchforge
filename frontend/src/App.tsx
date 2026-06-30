@@ -31,6 +31,7 @@ export default function App() {
   const [referenceDimension, setReferenceDimension] = useState(100);
   const [referenceAxis, setReferenceAxis] = useState("width");
   const [templateHint, setTemplateHint] = useState("auto");
+  const [furnitureStyleHint, setFurnitureStyleHint] = useState("auto");
   const [sketchFile, setSketchFile] = useState<File | null>(null);
   const [spec, setSpec] = useState<CADSpec | null>(null);
   const [versions, setVersions] = useState<VersionRecord[]>([]);
@@ -91,7 +92,7 @@ export default function App() {
   }, [spec, rebuildMesh]);
 
   const runConversion = useCallback(
-    async (file: File, hint = templateHint) => {
+    async (file: File, hint = templateHint, styleHint = furnitureStyleHint) => {
       if (!projectId) return;
       setConverting(true);
       setError(null);
@@ -104,6 +105,7 @@ export default function App() {
           referenceDimension,
           referenceAxis,
           hint,
+          styleHint,
         );
         setSpec(result.cad_spec);
         setSummary(buildConversionSummary(result.cad_spec, result.message, result.version));
@@ -116,19 +118,26 @@ export default function App() {
         setConverting(false);
       }
     },
-    [projectId, referenceDimension, referenceAxis, templateHint],
+    [projectId, referenceDimension, referenceAxis, templateHint, furnitureStyleHint],
   );
 
   const handleFileSelected = async (file: File) => {
     setSketchFile(file);
     setSketchUrl(URL.createObjectURL(file));
-    await runConversion(file, templateHint);
+    await runConversion(file, templateHint, furnitureStyleHint);
   };
 
   const handleTemplateHintChange = (hint: string) => {
     setTemplateHint(hint);
     if (sketchFile && hint !== "auto") {
-      void runConversion(sketchFile, hint);
+      void runConversion(sketchFile, hint, furnitureStyleHint);
+    }
+  };
+
+  const handleFurnitureStyleHintChange = (hint: string) => {
+    setFurnitureStyleHint(hint);
+    if (sketchFile && (templateHint === "chair" || templateHint === "auto")) {
+      void runConversion(sketchFile, templateHint, hint);
     }
   };
 
@@ -183,7 +192,7 @@ export default function App() {
   };
 
   const handleReconvert = () => {
-    if (sketchFile) void runConversion(sketchFile, templateHint);
+    if (sketchFile) void runConversion(sketchFile, templateHint, furnitureStyleHint);
   };
 
   const loading = converting || buildingMesh;
@@ -215,9 +224,11 @@ export default function App() {
             referenceDimension={referenceDimension}
             referenceAxis={referenceAxis}
             templateHint={templateHint}
+            furnitureStyleHint={furnitureStyleHint}
             onReferenceDimensionChange={setReferenceDimension}
             onReferenceAxisChange={setReferenceAxis}
             onTemplateHintChange={handleTemplateHintChange}
+            onFurnitureStyleHintChange={handleFurnitureStyleHintChange}
             onFileSelected={handleFileSelected}
             disabled={loading || !projectId}
           />

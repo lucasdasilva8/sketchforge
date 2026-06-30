@@ -1,4 +1,5 @@
 import type { CADSpec } from "../types/cadSpec";
+import { chairStyleDescription } from "./chairModels";
 
 export interface ConversionSummary {
   headline: string;
@@ -35,17 +36,28 @@ export function buildConversionSummary(
   const dimensions: string[] = [];
 
   switch (spec.template) {
-    case "chair":
+    case "chair": {
+      const style = String(p.furniture_style ?? "dining");
+      const styleLabel = chairStyleDescription(style);
       dimensions.push(
+        `Style: ${styleLabel}`,
         `Seat ${fmt(p.width)} × ${fmt(p.depth)} mm, thickness ${fmt(p.seat_thickness)} mm`,
         `Leg height ${fmt(p.height)} mm, leg thickness ${fmt(p.leg_width)} mm`,
         `Back height ${fmt(p.back_height ?? (p.height ?? 0) * 1.9)} mm`,
       );
+      const styleSteps: Record<string, string> = {
+        ladder_back: "Built ladder-back chair with slats and apron.",
+        dining: "Built dining chair with solid back panel.",
+        stool: "Built stool with four legs and no backrest.",
+        armchair: "Built armchair with arms and solid back.",
+        bench: "Built bench with multiple leg pairs and low back rail.",
+      };
       steps.push(
         "Estimated seat footprint and leg height from sketch proportions.",
-        "Built ladder-back chair: seat, four posts, two back slats, front apron.",
+        styleSteps[style] ?? styleSteps.dining,
       );
       break;
+    }
     case "cylinder":
       dimensions.push(`Radius ${fmt(p.radius)} mm, height ${fmt(p.height)} mm`);
       steps.push("Extruded circular profile to 3D cylinder.");

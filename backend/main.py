@@ -135,6 +135,7 @@ async def convert_route(
     reference_axis: str = Form("width"),
     use_ml: bool = Form(True),
     template_hint: str = Form("auto"),
+    furniture_style_hint: str = Form("auto"),
 ) -> ConvertResponse:
     try:
         get_project(project_id)
@@ -149,8 +150,11 @@ async def convert_route(
     save_sketch(project_id, content, ext)
 
     hint = None if template_hint in {"", "auto"} else template_hint
+    style_hint = None if furniture_style_hint in {"", "auto"} else furniture_style_hint
     try:
-        spec = convert_sketch(content, reference_dimension, reference_axis, use_ml, hint)
+        spec = convert_sketch(
+            content, reference_dimension, reference_axis, use_ml, hint, style_hint
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -158,8 +162,9 @@ async def convert_route(
     p = spec.parameters
     dim_bits: list[str] = []
     if spec.template == "chair":
+        style_label = p.get("style_label", p.get("furniture_style", "chair"))
         dim_bits.append(
-            f"seat {p.get('width', 0):.0f}×{p.get('depth', 0):.0f} mm, "
+            f"{style_label}: seat {p.get('width', 0):.0f}×{p.get('depth', 0):.0f} mm, "
             f"legs {p.get('height', 0):.0f} mm, back {p.get('back_height', 0):.0f} mm"
         )
     elif spec.template == "cylinder":

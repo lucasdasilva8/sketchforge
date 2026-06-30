@@ -1,5 +1,6 @@
 import type { CADSpec } from "../types/cadSpec";
 import { getEditableParameters } from "../lib/cadCompiler";
+import { chairStyleDescription } from "../lib/chairModels";
 
 interface ParametricControlsProps {
   spec: CADSpec | null;
@@ -23,6 +24,11 @@ export function ParametricControls({ spec, onChange }: ParametricControlsProps) 
       <div className="panel-header compact">
         <h3>Parameters</h3>
         <span className="badge">{spec.template}</span>
+        {spec.template === "chair" && spec.parameters.furniture_style && (
+          <span className="badge subtle">
+            {chairStyleDescription(String(spec.parameters.furniture_style))}
+          </span>
+        )}
         {spec.confidence !== undefined && (
           <span className="badge subtle">Confidence {(spec.confidence * 100).toFixed(0)}%</span>
         )}

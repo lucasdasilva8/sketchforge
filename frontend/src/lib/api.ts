@@ -43,6 +43,7 @@ export async function convertSketch(
   referenceDimension: number,
   referenceAxis: string,
   templateHint = "auto",
+  furnitureStyleHint = "auto",
 ): Promise<ConvertResponse> {
   const form = new FormData();
   form.append("file", file);
@@ -50,6 +51,7 @@ export async function convertSketch(
   form.append("reference_axis", referenceAxis);
   form.append("use_ml", "true");
   form.append("template_hint", templateHint);
+  form.append("furniture_style_hint", furnitureStyleHint);
   return handle(await fetch(`${API_BASE}/projects/${projectId}/convert`, { method: "POST", body: form }));
 }
 

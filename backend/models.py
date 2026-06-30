@@ -43,7 +43,7 @@ class CADSpec(BaseModel):
     template: TemplateType
     sketches: List[SketchDef]
     operations: List[Operation]
-    parameters: Dict[str, float]
+    parameters: Dict[str, Any]
     confidence: float = Field(default=0.5, ge=0, le=1)
     source: SourceType = "heuristic"
 

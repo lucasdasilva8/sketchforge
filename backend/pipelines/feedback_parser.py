@@ -117,7 +117,22 @@ def _wants_chair_template(text: str) -> bool:
     )
 
 
-def _promote_to_chair(spec: CADSpec) -> CADSpec:
+def _detect_furniture_style_from_feedback(text: str) -> str | None:
+    lower = text.lower()
+    mapping = {
+        "ladder_back": ("ladder", "ladder-back", "slat", "slats"),
+        "stool": ("stool", "bar stool", "no back"),
+        "armchair": ("armchair", "arm chair", "with arms", "add arms"),
+        "bench": ("bench", "park bench", "long seat"),
+        "dining": ("dining chair", "dining", "side chair"),
+    }
+    for style, phrases in mapping.items():
+        if any(p in lower for p in phrases):
+            return style
+    return None
+
+
+def _promote_to_chair(spec: CADSpec, furniture_style: str = "dining") -> CADSpec:
     from pipelines.sketch_parser import _build_chair_spec
 
     p = spec.parameters
@@ -129,7 +144,9 @@ def _promote_to_chair(spec: CADSpec) -> CADSpec:
     leg_w = p.get("leg_width", p.get("wall_thickness", max(seat_w * 0.065, 4.0)))
     seat_t = p.get("seat_thickness", 5.0)
     back_h = p.get("back_height", leg_h * 1.85)
-    spec = _build_chair_spec(seat_w, seat_d, leg_h, leg_w, seat_t, spec.confidence or 0.7, back_h)
+    spec = _build_chair_spec(
+        seat_w, seat_d, leg_h, leg_w, seat_t, spec.confidence or 0.7, back_h, furniture_style
+    )
     return spec
 
 
@@ -138,9 +155,17 @@ def apply_feedback(spec: CADSpec, feedback: str) -> tuple[CADSpec, list[str]]:
     updated.source = "feedback"
     changes: list[str] = []
 
+    style_from_feedback = _detect_furniture_style_from_feedback(feedback)
+
     if _wants_chair_template(feedback) and updated.template != "chair":
-        updated = _promote_to_chair(updated)
+        updated = _promote_to_chair(updated, style_from_feedback or "dining")
         changes.append("Switched template to chair based on feedback")
+    elif style_from_feedback and updated.template == "chair":
+        updated.parameters["furniture_style"] = style_from_feedback
+        from pipelines.furniture_styles import STYLE_LABELS
+
+        updated.parameters["style_label"] = STYLE_LABELS.get(style_from_feedback, style_from_feedback)
+        changes.append(f"Switched furniture style to {STYLE_LABELS.get(style_from_feedback, style_from_feedback)}")
 
     sentences = re.split(r"[.;!\n]+", feedback)
     for sentence in sentences:

@@ -360,6 +360,7 @@ def _build_chair_spec(
     seat_thickness: float,
     confidence: float,
     back_height: float | None = None,
+    furniture_style: str = "dining",
 ) -> CADSpec:
     profile = [
         [0, 0],
@@ -381,6 +382,7 @@ def _build_chair_spec(
             "back_height": round(back_h, 2),
             "leg_width": round(leg_width, 2),
             "seat_thickness": round(seat_thickness, 2),
+            "furniture_style": furniture_style,
             "fillet_radius": 0,
             "wall_thickness": round(leg_width, 2),
         },
@@ -394,7 +396,14 @@ def sketch_to_cad_spec(
     reference_dimension: float,
     reference_axis: AxisType = "width",
     template_hint: str | None = None,
+    furniture_style_hint: str | None = None,
 ) -> CADSpec:
+    from pipelines.furniture_styles import (
+        STYLE_LABELS,
+        detect_furniture_style,
+        parse_style_hint,
+    )
+
     analysis = analyze_sketch(image_bytes)
     score = chair_score(image_bytes)
 
@@ -416,8 +425,14 @@ def sketch_to_cad_spec(
 
     if analysis.template == "chair":
         aspect = analysis.aspect_ratio
+        hint_style = parse_style_hint(furniture_style_hint)
+        if hint_style:
+            furniture_style = hint_style
+            style_confidence = 0.9
+        else:
+            furniture_style, style_confidence = detect_furniture_style(image_bytes)
+
         if aspect >= 1.15:
-            # Plan / top-down sketch: bbox is mostly the seat footprint
             seat_width = max(width, depth)
             seat_depth = (
                 min(width, depth)
@@ -429,25 +444,42 @@ def sketch_to_cad_spec(
             seat_thickness = max(min(width, depth) * 0.08, 4.0)
             leg_width = max(seat_width * 0.065, 4.0)
         else:
-            # Front / side elevation: full bbox height is overall chair height
             seat_width = width
             total_vertical = (
                 depth if analysis.bbox_height_px >= analysis.bbox_width_px else width
             )
-            leg_height = max(total_vertical * 0.43, 28.0)
-            back_height = total_vertical
+            if furniture_style == "stool":
+                leg_height = max(total_vertical * 0.55, 35.0)
+                back_height = leg_height
+            elif furniture_style == "bench":
+                leg_height = max(total_vertical * 0.38, 30.0)
+                back_height = max(total_vertical * 0.55, leg_height + 10)
+            elif furniture_style == "armchair":
+                leg_height = max(total_vertical * 0.4, 30.0)
+                back_height = total_vertical
+            else:
+                leg_height = max(total_vertical * 0.43, 28.0)
+                back_height = total_vertical
             seat_thickness = max(total_vertical * 0.045, 4.0)
-            seat_depth = max(seat_width * 0.5, 28.0)
+            seat_depth = max(seat_width * 0.62, 30.0) if furniture_style == "armchair" else max(seat_width * 0.5, 28.0)
             leg_width = max(seat_width * 0.065, 4.0)
-        return _build_chair_spec(
+
+        if furniture_style == "bench":
+            seat_depth = max(seat_width * 0.22, 22.0)
+
+        combined_confidence = max(analysis.confidence, score, style_confidence, 0.65)
+        spec = _build_chair_spec(
             seat_width,
             seat_depth,
             leg_height,
             leg_width,
             seat_thickness,
-            analysis.confidence,
+            combined_confidence,
             back_height=back_height,
+            furniture_style=furniture_style,
         )
+        spec.parameters["style_label"] = STYLE_LABELS.get(furniture_style, furniture_style)
+        return spec
     if analysis.template == "cylinder":
         return _build_cylinder_spec(radius, height, analysis.confidence)
     if analysis.template == "profile_extrude":

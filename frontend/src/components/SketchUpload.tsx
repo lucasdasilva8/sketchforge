@@ -1,13 +1,16 @@
 import { useRef, useState } from "react";
+import { FURNITURE_STYLE_OPTIONS } from "../lib/chairModels";
 
 interface SketchUploadProps {
   sketchUrl: string | null;
   referenceDimension: number;
   referenceAxis: string;
   templateHint: string;
+  furnitureStyleHint: string;
   onReferenceDimensionChange: (value: number) => void;
   onReferenceAxisChange: (axis: string) => void;
   onTemplateHintChange: (hint: string) => void;
+  onFurnitureStyleHintChange: (hint: string) => void;
   onFileSelected: (file: File) => void;
   disabled?: boolean;
 }
@@ -33,12 +36,15 @@ export function SketchUpload({
   referenceDimension,
   referenceAxis,
   templateHint,
+  furnitureStyleHint,
   onReferenceDimensionChange,
   onReferenceAxisChange,
   onTemplateHintChange,
+  onFurnitureStyleHintChange,
   onFileSelected,
   disabled,
 }: SketchUploadProps) {
+  const showFurnitureStyles = templateHint === "chair" || templateHint === "auto";
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -126,6 +132,24 @@ export function SketchUpload({
             Choose “Chair / furniture” for chair sketches if auto-detect picks box.
           </span>
         </label>
+        {showFurnitureStyles && (
+          <label>
+            Furniture style
+            <select
+              value={furnitureStyleHint}
+              onChange={(e) => onFurnitureStyleHintChange(e.target.value)}
+            >
+              {FURNITURE_STYLE_OPTIONS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <span className="field-hint">
+              Auto picks dining, ladder-back, stool, armchair, or bench from the sketch.
+            </span>
+          </label>
+        )}
       </div>
     </div>
   );

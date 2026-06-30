@@ -199,18 +199,26 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <div>
-          <h1>SketchForge</h1>
-          <p>Convert hand sketches into editable parametric 3D models</p>
-        </div>
-        <div className="export-actions">
-          <button type="button" disabled={!spec || exporting} onClick={() => handleExport("stl")}>
-            Export STL
-          </button>
-          <button type="button" disabled={!spec || exporting} onClick={() => handleExport("step")}>
-            Export STEP
-          </button>
+      <header className="editorial-header">
+        <nav className="top-nav">
+          <span className="nav-brand">SketchForge</span>
+          <div className="nav-actions">
+            <button type="button" disabled={!spec || exporting} onClick={() => handleExport("stl")}>
+              Export STL
+            </button>
+            <button type="button" disabled={!spec || exporting} onClick={() => handleExport("step")}>
+              Export STEP
+            </button>
+          </div>
+        </nav>
+        <div className="hero-title">
+          <div>
+            <h1 className="hero-word">Sketch</h1>
+            <p className="hero-tagline">Convert hand sketches into editable parametric 3D models</p>
+          </div>
+          <h1 className="hero-word-vertical" aria-hidden="true">
+            Forge
+          </h1>
         </div>
       </header>
 
@@ -260,6 +268,11 @@ export default function App() {
           />
         </section>
       </main>
+
+      <footer className="footer-note">
+        <span className="footer-dot" aria-hidden="true" />
+        <span>SketchForge — Sketch to parametric CAD</span>
+      </footer>
     </div>
   );
 }

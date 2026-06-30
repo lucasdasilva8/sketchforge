@@ -22,7 +22,7 @@ function CADMesh({ mesh }: { mesh: MeshData }) {
 
   return (
     <mesh ref={ref} geometry={geometry} castShadow receiveShadow>
-      <meshStandardMaterial color="#6ea8fe" metalness={0.15} roughness={0.45} />
+      <meshStandardMaterial color="#1a1a1a" metalness={0.08} roughness={0.62} />
     </mesh>
   );
 }
@@ -60,11 +60,12 @@ export function ModelViewer({ mesh, loading, error, onRebuild, canRebuild }: Mod
         {!mesh && !loading && !error && (
           <div className="viewer-overlay">Upload a sketch to generate a 3D model</div>
         )}
-        <Canvas shadows>
+        <Canvas shadows style={{ background: "#f7f2f0" }}>
+          <color attach="background" args={["#f7f2f0"]} />
           <PerspectiveCamera makeDefault position={[180, 120, 180]} fov={45} />
-          <ambientLight intensity={0.55} />
-          <directionalLight castShadow position={[120, 180, 80]} intensity={1.1} />
-          <gridHelper args={[400, 20, "#334155", "#1e293b"]} />
+          <ambientLight intensity={0.72} />
+          <directionalLight castShadow position={[120, 180, 80]} intensity={0.95} />
+          <gridHelper args={[400, 20, "#c4b4b4", "#e0d6d4"]} />
           {mesh && <CADMesh mesh={mesh} />}
           <OrbitControls makeDefault enableDamping />
         </Canvas>

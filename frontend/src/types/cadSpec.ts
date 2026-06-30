@@ -33,7 +33,7 @@ export interface CADSpec {
   template: TemplateType;
   sketches: SketchDef[];
   operations: Operation[];
-  parameters: Record<string, number>;
+  parameters: Record<string, number | string>;
   confidence?: number;
   source?: string;
 }

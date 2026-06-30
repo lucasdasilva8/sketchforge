@@ -26,7 +26,7 @@ export function ConversionSummary({
   if (!summary) {
     return (
       <div className="summary-panel">
-        <h3>What happened</h3>
+        <h3>Process</h3>
         <p className="muted">Upload a sketch to see detection steps and dimensions.</p>
       </div>
     );
@@ -35,7 +35,7 @@ export function ConversionSummary({
   return (
     <div className="summary-panel">
       <div className="panel-header compact">
-        <h3>What happened</h3>
+        <h3>Process</h3>
         {meshReady && !meshError && <span className="badge subtle">3D ready</span>}
         {buildingMesh && <span className="badge">Building 3D…</span>}
         {meshError && <span className="badge error-badge">3D failed</span>}

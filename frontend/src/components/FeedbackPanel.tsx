@@ -27,8 +27,8 @@ export function FeedbackPanel({ versions, onSubmitFeedback, disabled }: Feedback
   return (
     <div className="feedback-panel">
       <div className="panel-header">
-        <h2>Feedback</h2>
-        <p>Describe what is wrong and the model will update.</p>
+        <h2>Refine</h2>
+        <p>Describe what to change and the model will update.</p>
       </div>
 
       <textarea

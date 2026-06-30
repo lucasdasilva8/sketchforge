@@ -56,8 +56,8 @@ export function SketchUpload({
   return (
     <div className="sketch-panel">
       <div className="panel-header">
-        <h2>Sketch Input</h2>
-        <p>Upload a photo of a hand-drawn product sketch.</p>
+        <h2>Upload</h2>
+        <p>A photo of a hand-drawn product sketch.</p>
       </div>
 
       <div

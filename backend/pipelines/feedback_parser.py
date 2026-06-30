@@ -15,6 +15,7 @@ DIMENSION_ALIASES = {
     "wall_thickness": ["wall", "walls", "thickness"],
     "leg_width": ["leg", "legs", "leg width"],
     "seat_thickness": ["seat", "seat thickness", "cushion"],
+    "back_height": ["back", "backrest", "back height", "taller back"],
 }
 
 
@@ -125,9 +126,11 @@ def _promote_to_chair(spec: CADSpec) -> CADSpec:
     if seat_d < seat_w * 0.25:
         seat_d = max(seat_w * 0.55, 25.0)
     leg_h = p.get("height", max(seat_w * 0.42, 35.0))
-    leg_w = p.get("leg_width", p.get("wall_thickness", max(seat_w * 0.1, 5.0)))
+    leg_w = p.get("leg_width", p.get("wall_thickness", max(seat_w * 0.065, 4.0)))
     seat_t = p.get("seat_thickness", 5.0)
-    return _build_chair_spec(seat_w, seat_d, leg_h, leg_w, seat_t, spec.confidence or 0.7)
+    back_h = p.get("back_height", leg_h * 1.85)
+    spec = _build_chair_spec(seat_w, seat_d, leg_h, leg_w, seat_t, spec.confidence or 0.7, back_h)
+    return spec
 
 
 def apply_feedback(spec: CADSpec, feedback: str) -> tuple[CADSpec, list[str]]:

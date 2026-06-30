@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ConversionSummary } from "./components/ConversionSummary";
 import { FeedbackPanel } from "./components/FeedbackPanel";
 import { ModelViewer } from "./components/ModelViewer";
 import { ParametricControls } from "./components/ParametricControls";
@@ -12,6 +13,7 @@ import {
 } from "./lib/api";
 import { syncSketchesFromParameters } from "./lib/cadCompiler";
 import { getCADWorker } from "./lib/cadWorkerClient";
+import { buildConversionSummary, type ConversionSummary as Summary } from "./lib/conversionSummary";
 import type { CADSpec, MeshData, VersionRecord } from "./types/cadSpec";
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -33,23 +35,28 @@ export default function App() {
   const [spec, setSpec] = useState<CADSpec | null>(null);
   const [versions, setVersions] = useState<VersionRecord[]>([]);
   const [mesh, setMesh] = useState<MeshData | null>(null);
+  const [summary, setSummary] = useState<Summary | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [meshError, setMeshError] = useState<string | null>(null);
+  const [converting, setConverting] = useState(false);
+  const [buildingMesh, setBuildingMesh] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const rebuildMesh = useCallback(async (nextSpec: CADSpec) => {
-    setLoading(true);
-    setError(null);
+    setBuildingMesh(true);
+    setMeshError(null);
     try {
       const synced = syncSketchesFromParameters(nextSpec);
       const worker = getCADWorker();
       const nextMesh = await worker.buildMesh(synced);
       setMesh(nextMesh);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to build 3D model");
+      const message = err instanceof Error ? err.message : "Failed to build 3D model";
+      setMeshError(message);
+      setMesh(null);
     } finally {
-      setLoading(false);
+      setBuildingMesh(false);
     }
   }, []);
 
@@ -86,8 +93,9 @@ export default function App() {
   const runConversion = useCallback(
     async (file: File, hint = templateHint) => {
       if (!projectId) return;
-      setLoading(true);
+      setConverting(true);
       setError(null);
+      setMeshError(null);
       setStatus("Converting sketch…");
       try {
         const result = await convertSketch(
@@ -98,20 +106,14 @@ export default function App() {
           hint,
         );
         setSpec(result.cad_spec);
-        const template = result.cad_spec.template;
-        let message =
-          result.message ?? `Generated v${result.version} (${template})`;
-        if (template === "box" && hint === "auto") {
-          message +=
-            " — If this is a chair, pick “Chair / furniture” above and re-upload (or change shape type to re-convert).";
-        }
-        setStatus(message);
+        setSummary(buildConversionSummary(result.cad_spec, result.message, result.version));
+        setStatus(result.message ?? `Generated v${result.version}`);
         const project = await (await import("./lib/api")).getProject(projectId);
         setVersions(project.versions);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Conversion failed");
       } finally {
-        setLoading(false);
+        setConverting(false);
       }
     },
     [projectId, referenceDimension, referenceAxis, templateHint],
@@ -134,23 +136,31 @@ export default function App() {
     if (!spec) return;
     const updated = syncSketchesFromParameters(updateSpecParameters(spec, key, value));
     setSpec(updated);
+    setSummary(buildConversionSummary(updated));
   };
 
   const handleFeedback = async (feedback: string) => {
     if (!projectId) return;
-    setLoading(true);
+    setConverting(true);
     setError(null);
     setStatus("Applying feedback…");
     try {
       const result = await refineProject(projectId, feedback);
       setSpec(result.cad_spec);
+      setSummary(
+        buildConversionSummary(
+          result.cad_spec,
+          result.applied_changes.join("; "),
+          result.version,
+        ),
+      );
       setStatus(result.applied_changes.join("; "));
       const project = await (await import("./lib/api")).getProject(projectId);
       setVersions(project.versions);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Feedback failed");
     } finally {
-      setLoading(false);
+      setConverting(false);
     }
   };
 
@@ -167,6 +177,16 @@ export default function App() {
       setExporting(false);
     }
   };
+
+  const handleRebuildMesh = () => {
+    if (spec) void rebuildMesh(spec);
+  };
+
+  const handleReconvert = () => {
+    if (sketchFile) void runConversion(sketchFile, templateHint);
+  };
+
+  const loading = converting || buildingMesh;
 
   return (
     <div className="app">
@@ -201,6 +221,17 @@ export default function App() {
             onFileSelected={handleFileSelected}
             disabled={loading || !projectId}
           />
+          <ConversionSummary
+            summary={summary}
+            meshReady={mesh !== null && !meshError}
+            meshError={meshError}
+            converting={converting}
+            buildingMesh={buildingMesh}
+            canReconvert={Boolean(sketchFile && projectId)}
+            canRebuild={Boolean(spec)}
+            onReconvert={handleReconvert}
+            onRebuildMesh={handleRebuildMesh}
+          />
           <ParametricControls spec={spec} onChange={handleParamChange} />
           <FeedbackPanel
             versions={versions}
@@ -209,7 +240,13 @@ export default function App() {
           />
         </section>
         <section className="right-column">
-          <ModelViewer mesh={mesh} loading={loading} error={error} />
+          <ModelViewer
+            mesh={mesh}
+            loading={buildingMesh}
+            error={meshError}
+            onRebuild={handleRebuildMesh}
+            canRebuild={Boolean(spec) && !buildingMesh}
+          />
         </section>
       </main>
     </div>

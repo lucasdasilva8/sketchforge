@@ -92,22 +92,31 @@ export function compileCADSpecCode(spec: CADSpec): string {
     const st = synced.parameters.seat_thickness ?? 5;
     const lw = synced.parameters.leg_width ?? synced.parameters.wall_thickness ?? 8;
     const lh = synced.parameters.height ?? 45;
+    const bh = synced.parameters.back_height ?? lh * 1.85;
     return `
-      const sw = ${sw}, sd = ${sd}, st = ${st}, lw = ${lw}, lh = ${lh};
-      const mkLeg = (x, y) => {
-        let leg = draw().hLine(lw).vLine(lw).close().sketchOnPlane("XY").extrude(lh);
-        return leg.translate(x, y, 0);
+      const sw = ${sw}, sd = ${sd}, st = ${st}, lw = ${lw}, lh = ${lh}, bh = ${bh};
+      const mkBar = (w, d, h, x, y, z) => {
+        let bar = draw().hLine(w).vLine(d).close().sketchOnPlane("XY").extrude(h);
+        return bar.translate(x, y, z);
       };
-      const leg1 = mkLeg(0, 0);
-      const leg2 = mkLeg(sw - lw, 0);
-      const leg3 = mkLeg(0, sd - lw);
-      const leg4 = mkLeg(sw - lw, sd - lw);
+      const slatT = Math.max(lw * 0.35, 3);
+      const slatD = Math.max(lw * 0.75, 4);
+      const innerW = sw - 2 * lw;
+      const legFL = mkBar(lw, lw, lh, 0, 0, 0);
+      const legFR = mkBar(lw, lw, lh, sw - lw, 0, 0);
+      const postBL = mkBar(lw, lw, bh, 0, sd - lw, 0);
+      const postBR = mkBar(lw, lw, bh, sw - lw, sd - lw, 0);
       let seat = draw().hLine(sw).vLine(sd).close().sketchOnPlane("XY").extrude(st);
       seat = seat.translate(0, 0, lh);
-      let body = seat.fuse(leg1);
-      body = body.fuse(leg2);
-      body = body.fuse(leg3);
-      return body.fuse(leg4);
+      const slatZ1 = lh + (bh - lh) * 0.38;
+      const slatZ2 = lh + (bh - lh) * 0.78;
+      const slat1 = mkBar(innerW, slatD, slatT, lw, sd - lw - slatD, slatZ1);
+      const slat2 = mkBar(innerW, slatD, slatT, lw, sd - lw - slatD, slatZ2);
+      const apronH = Math.max(lw * 0.65, 4);
+      const apron = mkBar(innerW, apronH, st * 0.55, lw, 0, lh - st * 0.55);
+      let body = seat.fuse(legFL).fuse(legFR).fuse(postBL).fuse(postBR);
+      body = body.fuse(slat1).fuse(slat2).fuse(apron);
+      return body;
     `;
   }
 
@@ -137,7 +146,7 @@ export function getEditableParameters(spec: CADSpec): string[] {
     case "cylinder":
       return ["radius", "height"];
     case "chair":
-      return ["width", "depth", "height", "leg_width", "seat_thickness"];
+      return ["width", "depth", "height", "back_height", "leg_width", "seat_thickness"];
     case "bracket":
       return ["width", "depth", "height", "wall_thickness", "fillet_radius"];
     case "profile_extrude":

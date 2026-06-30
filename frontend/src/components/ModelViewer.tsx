@@ -31,9 +31,11 @@ interface ModelViewerProps {
   mesh: MeshData | null;
   loading?: boolean;
   error?: string | null;
+  onRebuild?: () => void;
+  canRebuild?: boolean;
 }
 
-export function ModelViewer({ mesh, loading, error }: ModelViewerProps) {
+export function ModelViewer({ mesh, loading, error, onRebuild, canRebuild }: ModelViewerProps) {
   useEffect(() => {
     return () => {
       /* geometry disposed via react-three-fiber unmount */
@@ -44,7 +46,14 @@ export function ModelViewer({ mesh, loading, error }: ModelViewerProps) {
     <div className="viewer-panel">
       <div className="viewer-toolbar">
         <span>3D Preview</span>
-        {loading && <span className="badge">Building model…</span>}
+        <div className="viewer-toolbar-actions">
+          {loading && <span className="badge">Building model…</span>}
+          {onRebuild && (
+            <button type="button" className="secondary compact" disabled={!canRebuild} onClick={onRebuild}>
+              Try again
+            </button>
+          )}
+        </div>
       </div>
       <div className="viewer-canvas">
         {error && <div className="viewer-overlay error">{error}</div>}

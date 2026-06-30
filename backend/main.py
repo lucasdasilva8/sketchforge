@@ -155,11 +155,28 @@ async def convert_route(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     version = add_version(project_id, spec)
-    message = f"Detected {spec.template} (confidence {(spec.confidence * 100):.0f}%)"
+    p = spec.parameters
+    dim_bits: list[str] = []
+    if spec.template == "chair":
+        dim_bits.append(
+            f"seat {p.get('width', 0):.0f}×{p.get('depth', 0):.0f} mm, "
+            f"legs {p.get('height', 0):.0f} mm, back {p.get('back_height', 0):.0f} mm"
+        )
+    elif spec.template == "cylinder":
+        dim_bits.append(f"r={p.get('radius', 0):.0f} mm, h={p.get('height', 0):.0f} mm")
+    else:
+        dim_bits.append(
+            f"{p.get('width', 0):.0f}×{p.get('depth', 0):.0f}×{p.get('height', 0):.0f} mm"
+        )
+
+    message = (
+        f"Detected {spec.template} ({spec.confidence * 100:.0f}% confidence) — "
+        + ", ".join(dim_bits)
+    )
     if spec.confidence < 0.5:
-        message += " — low confidence; adjust parameters or pick a shape type."
+        message += ". Low confidence; adjust parameters or pick a shape type."
     if spec.template == "box":
-        message += " For chair sketches, choose “Chair / furniture” in Shape type."
+        message += " For chairs, choose “Chair / furniture” in Shape type."
 
     return ConvertResponse(
         project_id=project_id,

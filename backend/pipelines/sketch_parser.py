@@ -359,6 +359,7 @@ def _build_chair_spec(
     leg_width: float,
     seat_thickness: float,
     confidence: float,
+    back_height: float | None = None,
 ) -> CADSpec:
     profile = [
         [0, 0],
@@ -366,6 +367,7 @@ def _build_chair_spec(
         [seat_width, seat_depth],
         [0, seat_depth],
     ]
+    back_h = back_height if back_height is not None else leg_height * 1.85
     return CADSpec(
         template="chair",
         sketches=[SketchDef(id="seat", plane="XY", profile=profile)],
@@ -376,6 +378,7 @@ def _build_chair_spec(
             "width": round(seat_width, 2),
             "depth": round(seat_depth, 2),
             "height": round(leg_height, 2),
+            "back_height": round(back_h, 2),
             "leg_width": round(leg_width, 2),
             "seat_thickness": round(seat_thickness, 2),
             "fillet_radius": 0,
@@ -413,21 +416,37 @@ def sketch_to_cad_spec(
 
     if analysis.template == "chair":
         aspect = analysis.aspect_ratio
-        seat_thickness = max(min(width, depth) * 0.08, 4.0)
-        leg_width = max(max(width, depth) * 0.1, 5.0)
         if aspect >= 1.15:
             # Plan / top-down sketch: bbox is mostly the seat footprint
             seat_width = max(width, depth)
-            seat_depth = min(width, depth) if min(width, depth) > seat_width * 0.25 else seat_width * 0.55
+            seat_depth = (
+                min(width, depth)
+                if min(width, depth) > seat_width * 0.25
+                else seat_width * 0.55
+            )
             leg_height = max(seat_width * 0.42, 35.0)
+            back_height = leg_height * 1.75
+            seat_thickness = max(min(width, depth) * 0.08, 4.0)
+            leg_width = max(seat_width * 0.065, 4.0)
         else:
-            # Front / side elevation: bbox height includes legs
+            # Front / side elevation: full bbox height is overall chair height
             seat_width = width
-            total_vertical = max(width, depth) if analysis.bbox_height_px >= analysis.bbox_width_px else depth
-            leg_height = max(total_vertical - seat_thickness, 25.0)
-            seat_depth = max(seat_width * 0.55, 25.0)
+            total_vertical = (
+                depth if analysis.bbox_height_px >= analysis.bbox_width_px else width
+            )
+            leg_height = max(total_vertical * 0.43, 28.0)
+            back_height = total_vertical
+            seat_thickness = max(total_vertical * 0.045, 4.0)
+            seat_depth = max(seat_width * 0.5, 28.0)
+            leg_width = max(seat_width * 0.065, 4.0)
         return _build_chair_spec(
-            seat_width, seat_depth, leg_height, leg_width, seat_thickness, analysis.confidence
+            seat_width,
+            seat_depth,
+            leg_height,
+            leg_width,
+            seat_thickness,
+            analysis.confidence,
+            back_height=back_height,
         )
     if analysis.template == "cylinder":
         return _build_cylinder_spec(radius, height, analysis.confidence)

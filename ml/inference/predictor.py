@@ -1,36 +1,41 @@
 from __future__ import annotations
 
-import json
+import io
+import sys
 from pathlib import Path
-from typing import Any
 
 import torch
 import torch.nn as nn
-from torchvision import models, transforms
 from PIL import Image
-import io
-
-import sys
+from torchvision import models, transforms
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent / "backend"
+ML_DIR = Path(__file__).resolve().parent.parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
+if str(ML_DIR) not in sys.path:
+    sys.path.insert(0, str(ML_DIR))
 
+from dataset.param_codec import (
+    IDX_TO_TEMPLATE,
+    TEMPLATE_IDS,
+    TEMPLATE_TO_IDX,
+    decode_params,
+    encode_params,
+)
 from models import CADSpec, ExtrudeOp, FilletOp, SketchDef
-from pipelines.sketch_parser import sketch_to_cad_spec
 from pipelines.feedback_parser import apply_feedback
+from pipelines.sketch_parser import sketch_to_cad_spec
 
-CHECKPOINT_DIR = Path(__file__).resolve().parent.parent / "checkpoints"
+CHECKPOINT_DIR = ML_DIR / "checkpoints"
 CHECKPOINT_PATH = CHECKPOINT_DIR / "sketch_cad.pt"
-
-TEMPLATE_IDS = ["box", "cylinder", "profile_extrude", "bracket"]
-TEMPLATE_TO_IDX = {t: i for i, t in enumerate(TEMPLATE_IDS)}
 
 
 class SketchEncoder(nn.Module):
-    def __init__(self, embed_dim: int = 256) -> None:
+    def __init__(self, embed_dim: int = 256, pretrained: bool = True) -> None:
         super().__init__()
-        backbone = models.resnet18(weights=None)
+        weights = models.ResNet18_Weights.DEFAULT if pretrained else None
+        backbone = models.resnet18(weights=weights)
         backbone.fc = nn.Linear(backbone.fc.in_features, embed_dim)
         self.backbone = backbone
 
@@ -50,9 +55,9 @@ class CADParamHead(nn.Module):
 
 
 class SketchCADModel(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, pretrained: bool = True) -> None:
         super().__init__()
-        self.encoder = SketchEncoder()
+        self.encoder = SketchEncoder(pretrained=pretrained)
         self.head = CADParamHead()
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -68,13 +73,13 @@ PREPROCESS = transforms.Compose([
 ])
 
 
-def params_to_spec(template: str, raw_params: list[float], confidence: float) -> CADSpec:
-    width = max(abs(raw_params[0]) * 100 + 50, 10)
-    depth = max(abs(raw_params[1]) * 80 + 40, 10)
-    height = max(abs(raw_params[2]) * 60 + 30, 10)
-    radius = max(abs(raw_params[3]) * 40 + 20, 5)
-    fillet = max(abs(raw_params[4]) * 5, 0)
-    wall = max(abs(raw_params[5]) * 10 + 5, 2)
+def params_to_spec(template: str, parameters: dict[str, float], confidence: float) -> CADSpec:
+    width = parameters.get("width", 100)
+    depth = parameters.get("depth", 50)
+    height = parameters.get("height", 30)
+    radius = parameters.get("radius", 25)
+    fillet = parameters.get("fillet_radius", 0)
+    wall = parameters.get("wall_thickness", 8)
 
     if template == "cylinder":
         return CADSpec(
@@ -123,10 +128,10 @@ class SketchCADPredictor:
         self.device = torch.device("cpu")
 
     @classmethod
-    def try_load(cls) -> SketchCADPredictor | None:
+    def try_load(cls) -> "SketchCADPredictor | None":
         if not CHECKPOINT_PATH.exists():
             return cls(None)
-        model = SketchCADModel()
+        model = SketchCADModel(pretrained=False)
         state = torch.load(CHECKPOINT_PATH, map_location="cpu", weights_only=True)
         model.load_state_dict(state)
         model.eval()
@@ -135,17 +140,17 @@ class SketchCADPredictor:
     def is_ready(self) -> bool:
         return self.model is not None
 
-    def _encode(self, image_bytes: bytes) -> tuple[str, list[float], float]:
+    def _encode(self, image_bytes: bytes) -> tuple[str, dict[str, float], float]:
         assert self.model is not None
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         tensor = PREPROCESS(img).unsqueeze(0)
         with torch.no_grad():
             tmpl_logits, params, conf = self.model(tensor)
         template_idx = int(tmpl_logits.argmax(dim=1).item())
-        template = TEMPLATE_IDS[template_idx]
-        raw_params = params.squeeze(0).tolist()
+        template = IDX_TO_TEMPLATE.get(template_idx, "box")
+        parameters = decode_params(params.squeeze(0).tolist())
         confidence = float(conf.item())
-        return template, raw_params, confidence
+        return template, parameters, confidence
 
     def predict(
         self,
@@ -156,23 +161,22 @@ class SketchCADPredictor:
         if not self.is_ready():
             return sketch_to_cad_spec(image_bytes, reference_dimension, reference_axis)  # type: ignore[arg-type]
 
-        template, raw_params, confidence = self._encode(image_bytes)
-        spec = params_to_spec(template, raw_params, confidence)
-
+        template, ml_params, confidence = self._encode(image_bytes)
         heuristic = sketch_to_cad_spec(image_bytes, reference_dimension, reference_axis)  # type: ignore[arg-type]
-        scale = reference_dimension / max(heuristic.parameters.get(reference_axis, reference_dimension), 1)
-        for key in ("width", "depth", "height", "radius", "wall_thickness", "fillet_radius"):
-            if key in spec.parameters and key in heuristic.parameters:
-                spec.parameters[key] = round(heuristic.parameters[key], 2)
 
-        spec = params_to_spec(spec.template, [
-            spec.parameters.get("width", 50) / 100 - 0.5,
-            spec.parameters.get("depth", 40) / 80 - 0.5,
-            spec.parameters.get("height", 30) / 60 - 0.5,
-            spec.parameters.get("radius", 20) / 40 - 0.5,
-            spec.parameters.get("fillet_radius", 2) / 5,
-            spec.parameters.get("wall_thickness", 8) / 10 - 0.5,
-        ], confidence)
+        # Blend ML template with heuristic dimensions scaled from reference
+        merged = dict(ml_params)
+        for key in ("width", "depth", "height", "radius", "wall_thickness", "fillet_radius"):
+            if key in heuristic.parameters:
+                merged[key] = heuristic.parameters[key]
+
+        spec = params_to_spec(template, merged, confidence)
+        if heuristic.confidence > confidence:
+            spec.template = heuristic.template
+            spec.parameters = heuristic.parameters
+            spec.sketches = heuristic.sketches
+            spec.operations = heuristic.operations
+            spec.confidence = heuristic.confidence * 0.7 + confidence * 0.3
         spec.source = "ml"
         return spec
 

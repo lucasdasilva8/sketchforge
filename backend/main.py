@@ -121,6 +121,7 @@ async def convert_route(
     reference_dimension: float = Form(...),
     reference_axis: str = Form("width"),
     use_ml: bool = Form(True),
+    template_hint: str = Form("auto"),
 ) -> ConvertResponse:
     try:
         get_project(project_id)
@@ -134,8 +135,9 @@ async def convert_route(
     ext = Path(file.filename or "sketch.png").suffix or ".png"
     save_sketch(project_id, content, ext)
 
+    hint = None if template_hint in {"", "auto"} else template_hint
     try:
-        spec = convert_sketch(content, reference_dimension, reference_axis, use_ml)
+        spec = convert_sketch(content, reference_dimension, reference_axis, use_ml, hint)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

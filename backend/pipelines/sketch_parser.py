@@ -61,31 +61,75 @@ def _normalize_profile(points: np.ndarray, size: float = 100.0) -> list[list[flo
 
 def _chair_likelihood(gray: np.ndarray, processed: np.ndarray) -> float:
     h, w = gray.shape[:2]
+    scores: list[float] = []
+
     contours, _ = cv2.findContours(processed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    significant = [c for c in contours if cv2.contourArea(c) > 0.008 * h * w]
+    significant = [c for c in contours if cv2.contourArea(c) > 0.005 * h * w]
     if len(significant) >= 3:
-        return 0.72
+        scores.append(0.75)
 
-    lines = cv2.HoughLinesP(processed, 1, np.pi / 180, threshold=45, minLineLength=max(25, w // 12), maxLineGap=12)
-    if lines is None:
-        return 0.0
+    def _count_lines(edge_img: np.ndarray) -> tuple[int, int]:
+        lines = cv2.HoughLinesP(
+            edge_img, 1, np.pi / 180, threshold=35,
+            minLineLength=max(20, min(h, w) // 10), maxLineGap=15,
+        )
+        if lines is None:
+            return 0, 0
+        vertical = 0
+        horizontal = 0
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            dx, dy = abs(x2 - x1), abs(y2 - y1)
+            if dy > dx * 1.4:
+                vertical += 1
+            elif dx > dy * 1.4:
+                horizontal += 1
+        return vertical, horizontal
 
-    vertical = 0
-    horizontal = 0
-    for line in lines:
-        x1, y1, x2, y2 = line[0]
-        dx, dy = abs(x2 - x1), abs(y2 - y1)
-        if dy > dx * 1.8:
-            vertical += 1
-        elif dx > dy * 1.8:
-            horizontal += 1
-
-    tall = h >= w * 0.85
+    vertical, horizontal = _count_lines(processed)
+    tall = h >= w * 0.75
     if vertical >= 2 and horizontal >= 1 and tall:
-        return 0.78
-    if vertical >= 3 and tall:
-        return 0.68
-    return 0.0
+        scores.append(0.82)
+    elif vertical >= 2 and tall:
+        scores.append(0.68)
+
+    # Better for phone photos: adaptive threshold + Canny
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    adaptive = cv2.adaptiveThreshold(
+        blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 31, 8,
+    )
+    adaptive_edges = cv2.Canny(adaptive, 40, 120)
+    v2, h2 = _count_lines(adaptive_edges)
+    if v2 >= 2 and h2 >= 1 and tall:
+        scores.append(0.8)
+
+    # Ink density profile: seat band at top, legs below
+    dark = gray < 200
+    if dark.any():
+        row_density = dark.mean(axis=1)
+        col_density = dark.mean(axis=0)
+        top_band = row_density[: max(h // 3, 1)].mean()
+        mid_band = row_density[h // 3 : 2 * h // 3].mean() if h >= 3 else 0.0
+        bottom_band = row_density[2 * h // 3 :].mean() if h >= 3 else 0.0
+        if tall and top_band > 0.04 and bottom_band > 0.03 and top_band >= mid_band * 0.7:
+            scores.append(0.72)
+        if col_density.max() > 0.08 and top_band > 0.03 and tall:
+            scores.append(0.65)
+
+    # Single tall blob (common when seat + legs merge in one contour)
+    if contours:
+        contour = max(contours, key=cv2.contourArea)
+        _, _, cw, ch = cv2.boundingRect(contour)
+        if ch > cw * 1.05 and ch > h * 0.35:
+            scores.append(0.7)
+
+    return max(scores) if scores else 0.0
+
+
+def chair_score(image_bytes: bytes) -> float:
+    gray = _load_grayscale(image_bytes)
+    processed = _preprocess(gray)
+    return _chair_likelihood(gray, processed)
 
 
 def analyze_sketch(image_bytes: bytes) -> SketchAnalysis:
@@ -122,9 +166,9 @@ def analyze_sketch(image_bytes: bytes) -> SketchAnalysis:
     template: TemplateType = "box"
     confidence = 0.55
 
-    if chair_score >= 0.65:
+    if chair_score >= 0.45:
         template = "chair"
-        confidence = chair_score
+        confidence = max(chair_score, 0.6)
     elif circularity > 0.72:
         template = "cylinder"
         confidence = min(0.92, 0.55 + circularity * 0.4)
@@ -315,8 +359,18 @@ def sketch_to_cad_spec(
     image_bytes: bytes,
     reference_dimension: float,
     reference_axis: AxisType = "width",
+    template_hint: str | None = None,
 ) -> CADSpec:
     analysis = analyze_sketch(image_bytes)
+    score = chair_score(image_bytes)
+
+    if template_hint and template_hint not in {"", "auto"}:
+        analysis.template = template_hint  # type: ignore[misc]
+        analysis.confidence = 0.9
+    elif template_hint == "chair" or (template_hint is None and score >= 0.45):
+        analysis.template = "chair"  # type: ignore[misc]
+        analysis.confidence = max(analysis.confidence, score, 0.65)
+
     scale = _scale_from_reference(analysis, reference_dimension, reference_axis)
 
     width = analysis.bbox_width_px * scale
@@ -326,12 +380,16 @@ def sketch_to_cad_spec(
     radius = min(analysis.bbox_width_px, analysis.bbox_height_px) * scale / 2
     wall = max(min(width, depth) * 0.15, 2.0)
 
-    seat_thickness = max(min(width, depth) * 0.08, 3.0)
-    leg_width = max(min(width, depth) * 0.12, 4.0)
-    leg_height = max(height * 1.4, seat_thickness * 2)
-
     if analysis.template == "chair":
-        return _build_chair_spec(width, depth, leg_height, leg_width, seat_thickness, analysis.confidence)
+        seat_width = width
+        total_vertical = depth
+        seat_thickness = max(total_vertical * 0.12, 3.0)
+        leg_height = max(total_vertical - seat_thickness, 20.0)
+        seat_depth = max(seat_width * 0.55, 25.0)
+        leg_width = max(seat_width * 0.1, 4.0)
+        return _build_chair_spec(
+            seat_width, seat_depth, leg_height, leg_width, seat_thickness, analysis.confidence
+        )
     if analysis.template == "cylinder":
         return _build_cylinder_spec(radius, height, analysis.confidence)
     if analysis.template == "profile_extrude":

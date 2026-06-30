@@ -27,6 +27,7 @@ export default function App() {
   const [sketchUrl, setSketchUrl] = useState<string | null>(null);
   const [referenceDimension, setReferenceDimension] = useState(100);
   const [referenceAxis, setReferenceAxis] = useState("width");
+  const [templateHint, setTemplateHint] = useState("auto");
   const [spec, setSpec] = useState<CADSpec | null>(null);
   const [versions, setVersions] = useState<VersionRecord[]>([]);
   const [mesh, setMesh] = useState<MeshData | null>(null);
@@ -72,9 +73,13 @@ export default function App() {
         file,
         referenceDimension,
         referenceAxis,
+        templateHint,
       );
       setSpec(result.cad_spec);
-      setStatus(result.message ?? `Generated v${result.version}`);
+      setStatus(
+        result.message ??
+          `Generated v${result.version} (${result.cad_spec.template})`,
+      );
       const project = await (await import("./lib/api")).getProject(projectId);
       setVersions(project.versions);
     } catch (err) {
@@ -148,8 +153,10 @@ export default function App() {
             sketchUrl={sketchUrl}
             referenceDimension={referenceDimension}
             referenceAxis={referenceAxis}
+            templateHint={templateHint}
             onReferenceDimensionChange={setReferenceDimension}
             onReferenceAxisChange={setReferenceAxis}
+            onTemplateHintChange={setTemplateHint}
             onFileSelected={handleFileSelected}
             disabled={loading || !projectId}
           />

@@ -42,12 +42,14 @@ export async function convertSketch(
   file: File,
   referenceDimension: number,
   referenceAxis: string,
+  templateHint = "auto",
 ): Promise<ConvertResponse> {
   const form = new FormData();
   form.append("file", file);
   form.append("reference_dimension", String(referenceDimension));
   form.append("reference_axis", referenceAxis);
   form.append("use_ml", "true");
+  form.append("template_hint", templateHint);
   return handle(await fetch(`${API_BASE}/projects/${projectId}/convert`, { method: "POST", body: form }));
 }
 

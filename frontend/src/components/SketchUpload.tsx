@@ -4,8 +4,10 @@ interface SketchUploadProps {
   sketchUrl: string | null;
   referenceDimension: number;
   referenceAxis: string;
+  templateHint: string;
   onReferenceDimensionChange: (value: number) => void;
   onReferenceAxisChange: (axis: string) => void;
+  onTemplateHintChange: (hint: string) => void;
   onFileSelected: (file: File) => void;
   disabled?: boolean;
 }
@@ -17,12 +19,23 @@ const AXES = [
   { value: "radius", label: "Radius" },
 ];
 
+const TEMPLATES = [
+  { value: "auto", label: "Auto-detect" },
+  { value: "chair", label: "Chair / furniture" },
+  { value: "box", label: "Box / enclosure" },
+  { value: "cylinder", label: "Cylinder" },
+  { value: "bracket", label: "Bracket" },
+  { value: "profile_extrude", label: "Profile extrude" },
+];
+
 export function SketchUpload({
   sketchUrl,
   referenceDimension,
   referenceAxis,
+  templateHint,
   onReferenceDimensionChange,
   onReferenceAxisChange,
+  onTemplateHintChange,
   onFileSelected,
   disabled,
 }: SketchUploadProps) {
@@ -93,6 +106,19 @@ export function SketchUpload({
             {AXES.map((axis) => (
               <option key={axis.value} value={axis.value}>
                 {axis.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Shape type
+          <select
+            value={templateHint}
+            onChange={(e) => onTemplateHintChange(e.target.value)}
+          >
+            {TEMPLATES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
               </option>
             ))}
           </select>

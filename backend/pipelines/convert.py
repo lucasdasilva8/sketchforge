@@ -5,7 +5,7 @@ from pathlib import Path
 
 from models import CADSpec
 from pipelines.feedback_parser import apply_feedback
-from pipelines.sketch_parser import sketch_to_cad_spec
+from pipelines.sketch_parser import chair_score, sketch_to_cad_spec
 
 ML_DIR = Path(__file__).resolve().parent.parent.parent / "ml"
 if str(ML_DIR) not in sys.path:
@@ -39,18 +39,27 @@ def convert_sketch(
     reference_dimension: float,
     reference_axis: str = "width",
     use_ml: bool = True,
+    template_hint: str | None = None,
 ) -> CADSpec:
-    heuristic = sketch_to_cad_spec(image_bytes, reference_dimension, reference_axis)  # type: ignore[arg-type]
+    score = chair_score(image_bytes)
+    force_chair = template_hint == "chair" or score >= 0.45
 
-    # Prefer furniture/heuristic when it is more confident than ML box guesses
-    if heuristic.template == "chair" and heuristic.confidence >= 0.55:
+    heuristic = sketch_to_cad_spec(
+        image_bytes, reference_dimension, reference_axis, template_hint=template_hint
+    )
+
+    # Never downgrade a chair to a box
+    if force_chair or heuristic.template == "chair":
         return heuristic
 
     if use_ml and _predictor is not None and _predictor.is_ready():
         ml_spec = _predictor.predict(image_bytes, reference_dimension, reference_axis)
+        # Don't let ML force box when sketch looks chair-like
+        if ml_spec.template == "box" and score >= 0.35:
+            return heuristic
         if heuristic.confidence > ml_spec.confidence:
             return heuristic
-        if ml_spec.confidence >= 0.4:
+        if ml_spec.confidence >= 0.4 and ml_spec.template != "box":
             return ml_spec
 
     return heuristic

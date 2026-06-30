@@ -185,6 +185,10 @@ class SketchCADPredictor:
         template, ml_params, confidence = self._encode(image_bytes)
         heuristic = sketch_to_cad_spec(image_bytes, reference_dimension, reference_axis)  # type: ignore[arg-type]
 
+        if heuristic.template == "chair":
+            heuristic.source = "ml"
+            return heuristic
+
         # Blend ML template with heuristic dimensions scaled from reference
         merged = dict(ml_params)
         for key in ("width", "depth", "height", "radius", "wall_thickness", "fillet_radius"):

@@ -96,7 +96,11 @@ def _run_training() -> None:
             epochs=INCREMENTAL_EPOCHS,
             batch_size=16,
             synthetic_count=INCREMENTAL_SYNTHETIC,
+            chair_multiplier=2.0,
+            chair_weight=2.0,
             pretrained=not CHECKPOINT_PATH.exists(),
+            fine_tune=CHECKPOINT_PATH.exists(),
+            regenerate=True,
         )
 
         from pipelines.convert import reload_predictor

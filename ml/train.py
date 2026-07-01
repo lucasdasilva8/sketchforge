@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+from collections import Counter
 from pathlib import Path
 
 import torch
@@ -11,6 +12,7 @@ from torch.utils.data import DataLoader
 
 from dataset.export_feedback import export_feedback
 from dataset.generate_synthetic import generate_dataset
+from dataset.param_codec import TEMPLATE_IDS, TEMPLATE_TO_IDX
 from dataset.sketch_dataset import SketchDataset, load_manifest_records
 from inference.predictor import SketchCADModel, CHECKPOINT_DIR, CHECKPOINT_PATH
 
@@ -19,17 +21,36 @@ SYNTHETIC_MANIFEST = ML_DIR / "data" / "synthetic" / "manifest.jsonl"
 FEEDBACK_MANIFEST = ML_DIR / "data" / "feedback" / "manifest.jsonl"
 
 
+def _template_class_weights(
+    records: list[dict],
+    chair_weight: float = 1.0,
+) -> torch.Tensor:
+    counts = Counter(int(r["template_id"]) for r in records)
+    total = len(records)
+    weights = torch.ones(len(TEMPLATE_IDS), dtype=torch.float32)
+    for template_id, count in counts.items():
+        weights[template_id] = total / (len(TEMPLATE_IDS) * max(count, 1))
+    chair_idx = TEMPLATE_TO_IDX["chair"]
+    weights[chair_idx] *= chair_weight
+    weights = weights / weights.mean()
+    return weights
+
+
 def train(
     epochs: int = 15,
     batch_size: int = 32,
     lr: float = 1e-3,
     val_split: float = 0.15,
     synthetic_count: int = 2000,
+    chair_multiplier: float = 1.0,
+    chair_weight: float = 1.0,
     pretrained: bool = True,
+    fine_tune: bool = False,
+    regenerate: bool = False,
 ) -> None:
-    if not SYNTHETIC_MANIFEST.exists():
+    if regenerate or not SYNTHETIC_MANIFEST.exists():
         print("Generating synthetic dataset...")
-        generate_dataset(synthetic_count)
+        generate_dataset(synthetic_count, chair_multiplier=chair_multiplier)
 
     export_feedback()
 
@@ -50,10 +71,24 @@ def train(
     device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Training on {device} with {len(train_records)} train / {len(val_records)} val samples")
 
-    model = SketchCADModel(pretrained=pretrained).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    use_pretrained_backbone = pretrained and not (fine_tune and CHECKPOINT_PATH.exists())
+    model = SketchCADModel(pretrained=use_pretrained_backbone).to(device)
+
+    effective_lr = lr
+    if fine_tune and CHECKPOINT_PATH.exists():
+        state = torch.load(CHECKPOINT_PATH, map_location=device, weights_only=True)
+        model.load_state_dict(state, strict=False)
+        effective_lr = lr * 0.25
+        print(f"Fine-tuning from {CHECKPOINT_PATH} (lr={effective_lr})")
+    elif not use_pretrained_backbone:
+        print("Training from scratch (no ImageNet backbone)")
+
+    class_weights = _template_class_weights(train_records, chair_weight=chair_weight).to(device)
+    print(f"Template class weights: {dict(zip(TEMPLATE_IDS, class_weights.tolist()))}")
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=effective_lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
-    tmpl_loss_fn = nn.CrossEntropyLoss()
+    tmpl_loss_fn = nn.CrossEntropyLoss(weight=class_weights)
     param_loss_fn = nn.MSELoss()
 
     CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
@@ -132,12 +167,20 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--synthetic-count", type=int, default=2000)
+    parser.add_argument("--chair-multiplier", type=float, default=1.0, help="Oversample chair in synthetic data")
+    parser.add_argument("--chair-weight", type=float, default=1.0, help="Extra loss weight for chair class")
     parser.add_argument("--no-pretrained", action="store_true")
+    parser.add_argument("--fine-tune", action="store_true", help="Continue from existing checkpoint")
+    parser.add_argument("--regenerate", action="store_true", help="Regenerate synthetic data before training")
     args = parser.parse_args()
     train(
         epochs=args.epochs,
         batch_size=args.batch_size,
         lr=args.lr,
         synthetic_count=args.synthetic_count,
+        chair_multiplier=args.chair_multiplier,
+        chair_weight=args.chair_weight,
         pretrained=not args.no_pretrained,
+        fine_tune=args.fine_tune,
+        regenerate=args.regenerate,
     )

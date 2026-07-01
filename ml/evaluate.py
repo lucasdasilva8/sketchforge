@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 from pathlib import Path
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+from dataset.param_codec import IDX_TO_TEMPLATE, TEMPLATE_IDS
 from dataset.sketch_dataset import SketchDataset, load_manifest_records
 from inference.predictor import SketchCADModel, CHECKPOINT_PATH
 
@@ -35,6 +37,8 @@ def evaluate(manifest: Path = SYNTHETIC_MANIFEST) -> None:
     total_loss = 0.0
     correct = 0
     total = 0
+    per_class_correct: dict[str, int] = defaultdict(int)
+    per_class_total: dict[str, int] = defaultdict(int)
 
     with torch.no_grad():
         for images, tmpl_labels, param_targets in loader:
@@ -48,9 +52,22 @@ def evaluate(manifest: Path = SYNTHETIC_MANIFEST) -> None:
             correct += int((preds == tmpl_labels).sum().item())
             total += tmpl_labels.size(0)
 
+            for pred, label in zip(preds.tolist(), tmpl_labels.tolist()):
+                name = IDX_TO_TEMPLATE.get(label, "unknown")
+                per_class_total[name] += 1
+                if pred == label:
+                    per_class_correct[name] += 1
+
     print(f"Samples: {total}")
     print(f"Template accuracy: {correct / max(total, 1):.2%}")
     print(f"Average loss: {total_loss / max(len(loader), 1):.4f}")
+    print("\nPer-template accuracy:")
+    for name in TEMPLATE_IDS:
+        n = per_class_total.get(name, 0)
+        if n == 0:
+            continue
+        acc = per_class_correct[name] / n
+        print(f"  {name:16s} {acc:6.1%}  ({per_class_correct[name]}/{n})")
 
 
 if __name__ == "__main__":

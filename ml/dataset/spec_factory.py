@@ -91,10 +91,33 @@ def random_profile_spec() -> CADSpec:
     )
 
 
-def random_chair_spec() -> CADSpec:
-    seat_w, seat_d = _rand(50, 140), _rand(40, 100)
-    leg_h, leg_w = _rand(35, 90), _rand(4, 14)
+FURNITURE_STYLES = ["ladder_back", "dining", "stool", "armchair", "bench"]
+
+
+def random_chair_spec(style: str | None = None) -> CADSpec:
+    style = style or random.choice(FURNITURE_STYLES)
+    seat_w = _rand(50, 140)
+    seat_d = _rand(40, 100)
+    leg_h = _rand(35, 90)
+    leg_w = _rand(4, 14)
     seat_t = _rand(3, 10)
+
+    if style == "bench":
+        seat_w = _rand(100, 200)
+        seat_d = _rand(28, 55)
+        leg_h = _rand(40, 55)
+        back_h = leg_h + _rand(8, 25)
+    elif style == "stool":
+        back_h = leg_h
+        seat_d = _rand(35, 70)
+    elif style == "armchair":
+        seat_d = _rand(50, 95)
+        back_h = leg_h * _rand(1.45, 2.0)
+    elif style == "ladder_back":
+        back_h = leg_h * _rand(1.55, 2.15)
+    else:
+        back_h = leg_h * _rand(1.35, 1.95)
+
     profile = [[0, 0], [seat_w, 0], [seat_w, seat_d], [0, seat_d]]
     return CADSpec(
         template="chair",
@@ -106,6 +129,8 @@ def random_chair_spec() -> CADSpec:
             "height": leg_h,
             "leg_width": leg_w,
             "seat_thickness": seat_t,
+            "back_height": round(back_h, 2),
+            "furniture_style": style,
             "wall_thickness": leg_w,
             "fillet_radius": 0,
             "radius": seat_t,

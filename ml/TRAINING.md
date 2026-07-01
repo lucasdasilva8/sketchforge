@@ -2,6 +2,32 @@
 
 This guide walks you through training the sketch → CADSpec model.
 
+## Furniture / chair training
+
+Chair sketches are side elevations (legs, seat, backrest) — not top-down boxes. Use the furniture training script:
+
+```bash
+cd ~/Projects/sketchforge
+chmod +x scripts/train_furniture.sh
+./scripts/train_furniture.sh
+```
+
+Defaults: 5000 synthetic samples, **3× chair oversampling**, 20 epochs, **2.5× chair class weight**.
+
+Customize:
+```bash
+SYNTHETIC_COUNT=8000 CHAIR_MULTIPLIER=4 EPOCHS=25 ./scripts/train_furniture.sh
+```
+
+After training, check per-template accuracy (aim for **chair >80%**):
+```bash
+python ml/evaluate.py
+```
+
+**Real sketches help most:** upload chair photos in the app, fix with feedback (“this is a chair”, “ladder-back”), then re-run the script — feedback is merged automatically.
+
+---
+
 ## Quick start (one command)
 
 ```bash
@@ -25,7 +51,7 @@ The model learns two things from each sketch image:
 
 | Output | What it predicts |
 |--------|------------------|
-| **Template** | box, cylinder, bracket, or profile_extrude |
+| **Template** | box, cylinder, bracket, profile_extrude, or **chair** |
 | **Parameters** | width, depth, height, radius, fillet, wall thickness |
 
 Training data comes from two sources:
